@@ -344,7 +344,7 @@ export function LetzmrCategoryPage() {
               .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
           }}
         >
-          Gerar grupos / chave
+          Gerar jogos
         </Button>
         {cat.format === "GROUP_KO" && (
           <Button
@@ -373,7 +373,7 @@ export function LetzmrCategoryPage() {
               .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
           }}
         >
-          {cat.published ? "Despublicar" : "Publicar"}
+          {cat.published ? "Despublicar" : "Publicar as chaves"}
         </Button>
         <Button
           type="button"

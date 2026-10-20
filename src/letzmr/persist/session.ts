@@ -44,7 +44,7 @@ export function getSession(): LetzmrSession {
 }
 
 function buildPersistence(mode: LetzmrMode, userId: string | null): LetzmrPersistence {
-  if (mode === "demo") return createDemoPersistence();
+  if (mode === "demo" || !supabase) return createDemoPersistence();
   return createSupabasePersistence({
     client: supabase,
     getUserId: () => userId,

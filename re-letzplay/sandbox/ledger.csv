@@ -1,0 +1,3 @@
+id,time,class,action,object,location,object_id,before,undo,status,note
+L-001,2026-10-20T03:40:00Z,A3,update,category draw publish,test league / tourney 37139,272714,generated and not public,Unpublish if a control exists. Do not use cancel-generated-matches; that deletes the draw.,kept,User allowed every action on the test league. Fictional entrants. Only this category was included in the publish batch.
+L-002,2026-10-20T03:55:00Z,A3,update,three group-1 match scores,test league / category 272714,7757094 7757095 7757096,no results,Edit each score back to empty on Informar Placar.,kept,Scores 6-3 then 4-6 then 2-6 so group 1 finished. Used to see Visualizar. No real people.

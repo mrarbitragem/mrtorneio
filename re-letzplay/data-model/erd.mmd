@@ -1,0 +1,8 @@
+erDiagram
+  Category ||--o{ Group : contains
+  Category ||--o{ Entry : registers
+  Category ||--o{ Match : schedules
+  Group ||--o{ Standing : ranks
+  Standing }o--|| Entry : for
+  Group ||--o{ Match : plays
+  Match }o--o{ Entry : sides

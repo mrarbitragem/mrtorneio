@@ -1,0 +1,41 @@
+{
+  "session": "s01",
+  "date": "2026-10-20",
+  "masked": true,
+  "notes": "Structure only. Athlete names were read on screen and are not stored.",
+  "publicCategory": {
+    "route": "/:league/tournaments/:categoryId/draw",
+    "phases": ["Fase de Grupos at /draw and /draw/1", "R16 at /draw/2", "QF at /draw/3"],
+    "groupsObserved": 8,
+    "pairsPerGroup": 3,
+    "tieBreakLinkOnGroups": [2, 6],
+    "groupRow": ["two avatars", "two given names stacked", "position 1º 2º 3º", "ver infos"],
+    "groupFooter": "Os jogos do grupo estão concluídos. Visualizar",
+    "printRoute": "/:league/tournaments/:categoryId/draw_print"
+  },
+  "bracketOnDraw2": {
+    "matches": [
+      {"n": "25-32", "round": "R16", "count": 8},
+      {"n": "33-36", "round": "QF", "count": 4},
+      {"n": "37-38", "round": "SF", "count": 2}
+    ],
+    "matchParts": ["number", "round code", "trophy when finished", "two match-player rows", "match-points", "footer with date and time", "menu with comment count"],
+    "scoreExampleHtml": ["6|5|", "|7|"],
+    "scoreMeaning": "Games 6 with a tie-break digit 5, against 7."
+  },
+  "seedingCopy": [
+    "1st group 01 vs 2nd group 03",
+    "2nd group 02 vs 1st group 04",
+    "1st group 03 vs 2nd group 01",
+    "2nd group 04 vs 1st group 02"
+  ],
+  "sandboxCategory": {
+    "model": "Grupo + Chaves",
+    "groups": 4,
+    "qualifiersPerGroup": 2,
+    "scoreFormat": "doubles, 2 sets plus super tie-break, 6 games, tie-break at 6-6",
+    "registrationCap": 12,
+    "matches": 0,
+    "status": "registrations open"
+  }
+}

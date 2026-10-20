@@ -1,0 +1,40 @@
+{
+  "session": "s01",
+  "date": "2026-10-20",
+  "masked": true,
+  "notes": "Test league only. Athlete names were on screen and are not stored. Production circuit was not opened for this pass.",
+  "category": {
+    "league": "test",
+    "tourneyId": 37139,
+    "categoryId": 272714,
+    "model": "group plus knockout",
+    "groups": 3,
+    "pairsPerGroup": 3,
+    "set": "1 set to 6, tie-break at 6-6"
+  },
+  "beforeAnyScore": {
+    "visualizarCount": 0,
+    "matchesUnderGroup": true,
+    "slotLabel": "Sem horário definido"
+  },
+  "afterOneScore": {
+    "group": 1,
+    "matchesStillListed": 3,
+    "scoredLineShowsResult": true,
+    "visualizarOnThatGroup": false
+  },
+  "afterGroupComplete": {
+    "group": 1,
+    "scores": ["6/3", "4/6", "2/6"],
+    "footer": "Os jogos do Grupo 01 estão concluídos. Visualizar",
+    "siblingGroupsStillListMatches": true,
+    "scheduleStillListsThoseMatches": true,
+    "scheduleSlot": "Sem horário definido"
+  },
+  "tieBreakModal": {
+    "tieDefinition": "same win-loss balance",
+    "exactlyTwo": "confronto direto",
+    "threeOrMore": ["saldo de sets", "saldo de games", "aproveitamento de sets", "aproveitamento de games", "sorteio"],
+    "remainderOfTwoDuringTripleCascade": "confronto direto"
+  }
+}

@@ -1,0 +1,3 @@
+id,date,session,route,shows,masked
+EV-001,2026-10-20,s01,/tournaments/:id/draw,Group list, bracket columns, score markup and sandbox category settings. No names.,yes
+EV-002,2026-10-20,s01,/tournaments/272714/draw,Group match visibility before and after results, and the head-to-head sentence. No names.,yes

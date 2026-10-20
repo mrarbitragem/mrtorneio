@@ -44,6 +44,55 @@ export function seedDemoTournament() {
     eng.register({ categoryId: gc2.id, names: [n] });
   }
 
+  eng.generateDraw(gc.id, () => 0);
+  const drawn = eng.getStore();
+  const groups = drawn.groups
+    .filter((group) => group.categoryId === gc.id)
+    .sort((a, b) => a.index - b.index);
+  const first = groups[0];
+  const second = groups[1];
+  if (first) {
+    const groupMatches = drawn.matches.filter((match) => match.groupId === first.id);
+    const ids = [
+      ...new Set(groupMatches.flatMap((match) => [match.sideAId, match.sideBId].filter(Boolean))),
+    ] as string[];
+    const [a, b, c] = ids;
+    const scorePair = (
+      winner: string,
+      loser: string,
+      gamesWinner: number,
+      gamesLoser: number,
+      loserTiebreak?: number,
+    ) => {
+      const match = groupMatches.find(
+        (item) =>
+          (item.sideAId === winner && item.sideBId === loser) ||
+          (item.sideAId === loser && item.sideBId === winner),
+      );
+      if (!match?.sideAId) return;
+      const winnerIsA = match.sideAId === winner;
+      eng.recordScore(match.id, [
+        {
+          gamesA: winnerIsA ? gamesWinner : gamesLoser,
+          gamesB: winnerIsA ? gamesLoser : gamesWinner,
+          tiebreakA: !winnerIsA ? loserTiebreak : undefined,
+          tiebreakB: winnerIsA ? loserTiebreak : undefined,
+        },
+      ]);
+    };
+    if (a && b && c) {
+      scorePair(a, b, 6, 4);
+      scorePair(b, c, 7, 6, 5);
+      scorePair(c, a, 6, 2);
+    }
+  }
+  const pending = second
+    ? eng.getStore().matches.find((match) => match.groupId === second.id && match.status === "pending")
+    : undefined;
+  if (pending) {
+    eng.scheduleMatch(pending.id, "2026-05-10T12:00:00.000Z", "Quadra 01");
+  }
+
   eng.setPublished(gc.id, true);
 
   return eng.getStore();

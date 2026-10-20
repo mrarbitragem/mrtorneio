@@ -19,7 +19,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (!isSupabaseConfigured()) {
+  if (!isSupabaseConfigured() || !supabase) {
     return (
       <div className="mx-auto max-w-md space-y-4 p-8">
         <h1 className="text-xl font-bold">MRTorneio — Login</h1>

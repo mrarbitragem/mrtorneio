@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { createEngine } from "../store/engine";
 import type { LetzmrStore } from "../domain/types";
 import { getSession } from "../persist/session";
+import { PublicCategoryView } from "./PublicCategoryView";
 import { useLetzmr } from "./useLetzmr";
 
 /** Consulta pública read-only — só categorias publicadas. */
@@ -65,7 +65,8 @@ export function LetzmrPublicPage() {
       <div className="space-y-2">
         <h1 className="text-xl font-bold">Categoria não publicada</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          A consulta pública só exibe categorias publicadas pelo organizador.
+          Os jogos deste torneio ainda não estão disponíveis. A consulta pública só abre depois
+          que o organizador publica as chaves.
         </p>
         <Link to="/" className="text-sm underline">
           Início MRTorneio
@@ -74,58 +75,12 @@ export function LetzmrPublicPage() {
     );
   }
 
-  const eng = createEngine(remote, { autoLocalPersist: false });
-  const groups = remote.groups.filter((g) => g.categoryId === categoryId);
-  const matches = remote.matches
-    .filter((m) => m.categoryId === categoryId)
-    .sort(
-      (a, b) => a.phase.localeCompare(b.phase) || a.round - b.round || a.position - b.position,
-    );
-
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
-          Consulta pública (somente leitura)
-        </p>
-        <h1 className="text-2xl font-bold">{meta.tournamentName}</h1>
-        <p className="text-sm">{meta.categoryName}</p>
-      </div>
-
-      {groups.map((g) => {
-        const { ranked } = eng.getGroupStandings(g.id);
-        return (
-          <section key={g.id}>
-            <h2 className="mb-2 font-semibold">{g.label}</h2>
-            <ol className="list-decimal space-y-1 pl-5 text-sm">
-              {ranked.map((r) => (
-                <li key={r.registrationId}>
-                  {eng.regName(r.registrationId)} — {r.wins}V/{r.losses}D
-                </li>
-              ))}
-            </ol>
-          </section>
-        );
-      })}
-
-      <section>
-        <h2 className="mb-2 font-semibold">Jogos</h2>
-        <ul className="space-y-2 text-sm">
-          {matches.map((m) => (
-            <li key={m.id} className="border-b border-[hsl(var(--border))] pb-2">
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                {m.phase} R{m.round}
-              </span>
-              <br />
-              {m.placeholderA || eng.regName(m.sideAId)} vs{" "}
-              {m.placeholderB || eng.regName(m.sideBId)}
-              {m.winnerRegistrationId
-                ? ` → ${eng.regName(m.winnerRegistrationId)}`
-                : ` (${m.status})`}
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
+    <PublicCategoryView
+      store={remote}
+      categoryId={categoryId!}
+      tournamentName={meta.tournamentName}
+      categoryName={meta.categoryName}
+    />
   );
 }
