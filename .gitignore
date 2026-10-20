@@ -1,0 +1,21 @@
+# deps / build
+node_modules
+dist
+dist-ssr
+*.local
+
+# env (nunca commitar secrets)
+.env
+.env.local
+.env.*.local
+
+# editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+*.tsbuildinfo
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
