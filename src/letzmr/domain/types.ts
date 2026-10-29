@@ -24,6 +24,14 @@ export interface Tournament {
   createdAt: string;
 }
 
+/**
+ * Como os classificados entram na chave:
+ * - BY_GROUP: posição fixa por grupo ("1º G1 × 2º G3"), como no LetzPlay.
+ * - CROSS_RANKING: os 1ºs colocados são ranqueados entre os grupos
+ *   ("1º melhor 1º × 2º do 4º melhor 1º"), como no protótipo Árbitro BT.
+ */
+export type BracketSeeding = "BY_GROUP" | "CROSS_RANKING";
+
 export interface Category {
   id: string;
   tournamentId: string;
@@ -33,6 +41,15 @@ export interface Category {
   entryType: "singles" | "doubles";
   numGroups: number;
   advancersPerGroup: number;
+  /** Ausente em dados antigos = BY_GROUP. */
+  bracketSeeding?: BracketSeeding;
+  /**
+   * Ordem sorteada de grupos usada só para desempatar 1ºs colocados
+   * empatados em todos os critérios (modo CROSS_RANKING).
+   */
+  crossTieDrawOrder?: string[];
+  /** Quando o sorteio acima foi feito. Só muda por ação explícita do organizador. */
+  crossTieDrawnAt?: string;
   status: CategoryStatus;
   published: boolean;
   createdAt: string;
@@ -60,11 +77,13 @@ export interface Group {
   label: string;
 }
 
+/**
+ * Placar de um set em games (ex.: 7x6 ou 9x8 no set profissional).
+ * Decisão do produto: o dígito do tie-break não é guardado nem exibido.
+ */
 export interface SetScore {
   gamesA: number;
   gamesB: number;
-  tiebreakA?: number;
-  tiebreakB?: number;
 }
 
 export interface Score {

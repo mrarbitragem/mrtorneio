@@ -119,13 +119,19 @@ export function analyzeCorrectionImpact(args: {
   /** Current registration ids occupying KO round-1 group_rank slots */
   materializedQualifierIds: string[];
   standingsChangedOrder: boolean;
+  /**
+   * Ranking cruzado: a ordem dos 1ºs colocados entre os grupos mudaria
+   * (ou surgiu empate sem sorteio). Isso muda os confrontos da 1ª rodada
+   * mesmo quando os classificados são os mesmos.
+   */
+  crossOrderChanged?: boolean;
 }): CorrectionImpact {
   const expected = new Set(args.expectedQualifierIds);
   const materialized = new Set(args.materializedQualifierIds.filter(Boolean));
   const sameSet =
     expected.size === materialized.size && [...expected].every((id) => materialized.has(id));
 
-  const mismatch = !sameSet || args.standingsChangedOrder;
+  const mismatch = !sameSet || args.standingsChangedOrder || Boolean(args.crossOrderChanged);
   const koWithScores = args.koMatches.filter(
     (m) => m.phase === "KO" && (m.status === "played" || m.status === "wo"),
   );
@@ -144,8 +150,9 @@ export function analyzeCorrectionImpact(args: {
   return {
     kind: "advancement_mismatch",
     divergenceWarning: true,
-    message:
-      "Divergência: a classificação recalculada não coincide com os nomes já materializados na eliminatória. Confirme se deseja limpar/corrigir o avanço.",
+    message: args.crossOrderChanged
+      ? "Divergência: a ordem dos 1ºs colocados entre os grupos mudaria e, com ela, os confrontos da 1ª rodada da eliminatória. Confirme se deseja limpar/corrigir o avanço."
+      : "Divergência: a classificação recalculada não coincide com os nomes já materializados na eliminatória. Confirme se deseja limpar/corrigir o avanço.",
     affectedKoSlots: args.koMatches
       .filter((m) => m.round === 1 && m.phase === "KO")
       .map((m) => m.id),

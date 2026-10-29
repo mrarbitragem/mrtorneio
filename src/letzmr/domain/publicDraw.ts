@@ -37,19 +37,9 @@ export const TIEBREAK_RULES = [
   "Se nessa sequência restarem só duas duplas, vale de novo o confronto direto.",
 ];
 
-/** Games stay separate from the tie-break digit so 6 and 5 never become 65. */
-export function setScoreParts(set: SetScore): {
-  gamesA: number;
-  tiebreakA?: number;
-  gamesB: number;
-  tiebreakB?: number;
-} {
-  return {
-    gamesA: set.gamesA,
-    tiebreakA: set.tiebreakA,
-    gamesB: set.gamesB,
-    tiebreakB: set.tiebreakB,
-  };
+/** Texto público do set: só games, sem dígito de tie-break (7x6, 9x8). */
+export function formatSetScore(set: SetScore): string {
+  return `${set.gamesA}x${set.gamesB}`;
 }
 
 export function matchNumberIndex(matches: Match[], groups: Group[]): Map<string, number> {

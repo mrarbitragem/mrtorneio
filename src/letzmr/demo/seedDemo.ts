@@ -62,7 +62,6 @@ export function seedDemoTournament() {
       loser: string,
       gamesWinner: number,
       gamesLoser: number,
-      loserTiebreak?: number,
     ) => {
       const match = groupMatches.find(
         (item) =>
@@ -75,14 +74,12 @@ export function seedDemoTournament() {
         {
           gamesA: winnerIsA ? gamesWinner : gamesLoser,
           gamesB: winnerIsA ? gamesLoser : gamesWinner,
-          tiebreakA: !winnerIsA ? loserTiebreak : undefined,
-          tiebreakB: winnerIsA ? loserTiebreak : undefined,
         },
       ]);
     };
     if (a && b && c) {
       scorePair(a, b, 6, 4);
-      scorePair(b, c, 7, 6, 5);
+      scorePair(b, c, 7, 6);
       scorePair(c, a, 6, 2);
     }
   }

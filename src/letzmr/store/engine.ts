@@ -1,9 +1,12 @@
 import {
+  bindCrossRanking,
   buildKoMatchesFromPreset,
   expectedQualifiersFromStandings,
   materializeKoSlots,
+  pairingsUseCrossRanking,
   propagateByeWinners,
-  resolveBracketPreset,
+  rankFirstPlaces,
+  resolveBracketPairings,
 } from "../domain/bracket";
 import {
   assignGroups,
@@ -22,10 +25,12 @@ import {
   clearMatchScore,
   orderChanged,
 } from "../domain/score";
+import { isGroupComplete } from "../domain/publicDraw";
 import { findCrossCategoryConflicts } from "../domain/schedule";
 import { computeGroupStandings, rankGroup } from "../domain/standings";
 import type {
   Athlete,
+  BracketSeeding,
   Category,
   CategoryFormat,
   CorrectionImpact,
@@ -89,9 +94,17 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       entryType: "singles" | "doubles";
       numGroups?: number;
       advancersPerGroup?: number;
+      bracketSeeding?: BracketSeeding;
     }): Category => {
       if (args.format !== "GROUP_KO" && args.format !== "KO") {
         throw new Error("Formato fora do MVP");
+      }
+      const numGroups = args.format === "GROUP_KO" ? args.numGroups ?? 2 : 0;
+      const advancersPerGroup = args.format === "GROUP_KO" ? args.advancersPerGroup ?? 2 : 0;
+      const bracketSeeding: BracketSeeding = args.bracketSeeding ?? "BY_GROUP";
+      if (args.format === "GROUP_KO") {
+        // Falha na criação, não só no sorteio, se a regra não existe para a configuração.
+        resolveBracketPairings(numGroups, advancersPerGroup, bracketSeeding);
       }
       const c: Category = {
         id: newId("c"),
@@ -99,8 +112,9 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         name: args.name,
         format: args.format,
         entryType: args.entryType,
-        numGroups: args.format === "GROUP_KO" ? args.numGroups ?? 2 : 0,
-        advancersPerGroup: args.format === "GROUP_KO" ? args.advancersPerGroup ?? 2 : 0,
+        numGroups,
+        advancersPerGroup,
+        bracketSeeding: args.format === "GROUP_KO" ? bracketSeeding : undefined,
         status: "open",
         published: false,
         createdAt: new Date().toISOString(),
@@ -187,7 +201,11 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       }
 
       // Validate preset exists before drawing
-      resolveBracketPreset(cat.numGroups, cat.advancersPerGroup);
+      const pairings = resolveBracketPairings(
+        cat.numGroups,
+        cat.advancersPerGroup,
+        cat.bracketSeeding ?? "BY_GROUP",
+      );
 
       const { groups, registrations: assigned } = assignGroups(
         categoryId,
@@ -200,7 +218,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         const ids = assigned.filter((r) => r.groupId === g.id).map((r) => r.id);
         groupMatches.push(...buildRoundRobinMatches(categoryId, g.id, ids));
       }
-      const pairings = resolveBracketPreset(cat.numGroups, cat.advancersPerGroup);
       const ko = buildKoMatchesFromPreset(categoryId, pairings);
 
       store = {
@@ -212,7 +229,9 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         }),
         matches: [...store.matches, ...groupMatches, ...ko],
         categories: store.categories.map((c) =>
-          c.id === categoryId ? { ...c, status: "drawn" } : c,
+          c.id === categoryId
+            ? { ...c, status: "drawn", crossTieDrawOrder: undefined, crossTieDrawnAt: undefined }
+            : c,
         ),
       };
       persist();
@@ -301,12 +320,37 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         .filter((id): id is string => Boolean(id));
 
       const changed = orderChanged(before, after, cat.advancersPerGroup);
+
+      // Ranking cruzado: compara também a ordem dos 1ºs colocados entre os grupos.
+      let crossOrderChanged = false;
+      if ((cat.bracketSeeding ?? "BY_GROUP") === "CROSS_RANKING") {
+        const catGroups = store.groups.filter((g) => g.categoryId === cat.id);
+        const beforeByGroup = new Map<string, StandingRow[]>();
+        for (const g of catGroups) beforeByGroup.set(g.id, api.getGroupStandings(g.id).ranked);
+        const rankBefore = rankFirstPlaces({
+          groups: catGroups,
+          standingsByGroup: beforeByGroup,
+          matches: store.matches.filter((m) => m.categoryId === cat.id),
+          tieDrawOrder: cat.crossTieDrawOrder,
+        });
+        const rankAfter = rankFirstPlaces({
+          groups: catGroups,
+          standingsByGroup,
+          matches: simMatches.filter((m) => m.categoryId === cat.id),
+          tieDrawOrder: cat.crossTieDrawOrder,
+        });
+        crossOrderChanged =
+          rankBefore.orderedGroupIds.join("|") !== rankAfter.orderedGroupIds.join("|") ||
+          rankBefore.tiedGroupIds.length !== rankAfter.tiedGroupIds.length;
+      }
+
       return analyzeCorrectionImpact({
         groupMatch: match,
         koMatches: ko,
         expectedQualifierIds: expected,
         materializedQualifierIds: materialized,
         standingsChangedOrder: changed,
+        crossOrderChanged,
       });
     },
 
@@ -380,6 +424,20 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       const cat = store.categories.find((c) => c.id === categoryId);
       if (!cat || cat.format !== "GROUP_KO") throw new Error("Categoria G+C requerida");
       const groups = store.groups.filter((g) => g.categoryId === categoryId);
+      let pairings = resolveBracketPairings(
+        cat.numGroups,
+        cat.advancersPerGroup,
+        cat.bracketSeeding ?? "BY_GROUP",
+      );
+      if (pairingsUseCrossRanking(pairings)) {
+        // Antes de olhar empates: sem todos os grupos concluídos não há ranking de 1ºs.
+        const open = groups.find((g) => !isGroupComplete(store.matches, g.id));
+        if (open) {
+          throw new Error(
+            `Ranking cruzado: conclua todos os jogos de todos os grupos antes de montar a chave (faltam jogos em ${open.label}).`,
+          );
+        }
+      }
       const standingsByGroup = new Map<string, StandingRow[]>();
       const groupIndexToId = new Map<number, string>();
       for (const g of groups) {
@@ -395,7 +453,27 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         }
         standingsByGroup.set(g.id, ranked);
       }
-      const pairings = resolveBracketPreset(cat.numGroups, cat.advancersPerGroup);
+      if (pairingsUseCrossRanking(pairings)) {
+        const ranking = rankFirstPlaces({
+          groups,
+          standingsByGroup,
+          matches: store.matches.filter((m) => m.categoryId === categoryId),
+          tieDrawOrder: cat.crossTieDrawOrder,
+        });
+        if (ranking.tiedGroupIds.length) {
+          const labels = ranking.tiedGroupIds
+            .map((ids) => ids.map((id) => groups.find((g) => g.id === id)?.label).join(", "))
+            .join(" | ");
+          throw new Error(
+            `Empate entre 1ºs colocados (${labels}) em ${ranking.criteria}. Faça o sorteio de desempate dos 1ºs.`,
+          );
+        }
+        const indexById = new Map(groups.map((g) => [g.id, g.index]));
+        pairings = bindCrossRanking(
+          pairings,
+          ranking.orderedGroupIds.map((id) => indexById.get(id) as number),
+        );
+      }
       const ko = store.matches.filter((m) => m.categoryId === categoryId && m.phase === "KO");
       let nextKo = materializeKoSlots(ko, pairings, groupIndexToId, standingsByGroup);
       // merge back
@@ -408,6 +486,77 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       matches = propagateByeWinners(matches);
       store = { ...store, matches };
       persist();
+    },
+
+    /** Ranking atual dos 1ºs colocados (só faz sentido no modo CROSS_RANKING). */
+    getFirstPlaceRanking: (categoryId: string) => {
+      const cat = store.categories.find((c) => c.id === categoryId);
+      if (!cat || cat.format !== "GROUP_KO") throw new Error("Categoria G+C requerida");
+      const groups = store.groups.filter((g) => g.categoryId === categoryId);
+      const standingsByGroup = new Map<string, StandingRow[]>();
+      for (const g of groups) standingsByGroup.set(g.id, api.getGroupStandings(g.id).ranked);
+      return {
+        groups,
+        allGroupsComplete: groups.length > 0 && groups.every((g) => isGroupComplete(store.matches, g.id)),
+        ...rankFirstPlaces({
+          groups,
+          standingsByGroup,
+          matches: store.matches.filter((m) => m.categoryId === categoryId),
+          tieDrawOrder: cat.crossTieDrawOrder,
+        }),
+      };
+    },
+
+    /**
+     * Sorteia a ordem usada só para separar 1ºs colocados empatados em tudo.
+     * O resultado fica gravado na categoria; só é refeito com `opts.redo: true`
+     * (ação explícita do organizador). Nunca é refeito sozinho.
+     */
+    drawFirstPlaceTie: (
+      categoryId: string,
+      rng?: () => number,
+      opts: { redo?: boolean } = {},
+    ): string[] => {
+      const cat = store.categories.find((c) => c.id === categoryId);
+      if (!cat || cat.format !== "GROUP_KO") throw new Error("Categoria G+C requerida");
+      if ((cat.bracketSeeding ?? "BY_GROUP") !== "CROSS_RANKING") {
+        throw new Error("Esta categoria posiciona a chave por grupo, sem ranking de 1ºs.");
+      }
+      if (cat.crossTieDrawOrder && !opts.redo) {
+        throw new Error(
+          "O sorteio dos 1ºs já está gravado. Para refazer, use a ação explícita “Refazer sorteio”.",
+        );
+      }
+      const ranking = api.getFirstPlaceRanking(categoryId);
+      if (!ranking.tiedGroupIds.length && !ranking.resolvedByDrawGroupIds.length) {
+        throw new Error("Não há empate entre 1ºs colocados para sortear.");
+      }
+      const koMatches = store.matches.filter(
+        (m) => m.categoryId === categoryId && m.phase === "KO",
+      );
+      if (koMatches.some((m) => m.score)) {
+        throw new Error(
+          "A eliminatória já tem resultados lançados. Cancele-os antes de refazer o sorteio dos 1ºs.",
+        );
+      }
+      const groups = store.groups.filter((g) => g.categoryId === categoryId);
+      const order = performResidualDraw(
+        groups.map((g) => g.id),
+        rng,
+      );
+      const hadBracket = koMatches.some((m) => m.round === 1 && (m.sideAId || m.sideBId));
+      store = {
+        ...store,
+        categories: store.categories.map((c) =>
+          c.id === categoryId
+            ? { ...c, crossTieDrawOrder: order, crossTieDrawnAt: new Date().toISOString() }
+            : c,
+        ),
+      };
+      persist();
+      // Se a chave já estava montada, remonta com a nova ordem (sem placar a perder).
+      if (hadBracket && ranking.allGroupsComplete) api.materializeBracket(categoryId);
+      return order;
     },
 
     applyResidualDraw: (groupId: string, rng?: () => number): ResidualDraw => {

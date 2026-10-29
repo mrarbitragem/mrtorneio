@@ -10,7 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { CategoryFormat } from "../domain/types";
+import { BRACKET_SEEDING_LABEL, availableBracketSeedings } from "../domain/bracket";
+import type { BracketSeeding, CategoryFormat } from "../domain/types";
 import { useLetzmr } from "./useLetzmr";
 
 export function LetzmrTournamentPage() {
@@ -24,7 +25,13 @@ export function LetzmrTournamentPage() {
   const [entryType, setEntryType] = useState<"singles" | "doubles">("singles");
   const [numGroups, setNumGroups] = useState("2");
   const [advancers, setAdvancers] = useState("2");
+  const [seeding, setSeeding] = useState<BracketSeeding>("BY_GROUP");
   const [error, setError] = useState("");
+
+  const groupsN = Number(numGroups) || 2;
+  const advancersN = Number(advancers) || 2;
+  const seedingOptions = availableBracketSeedings(groupsN, advancersN);
+  const seedingBlocked = format === "GROUP_KO" && !seedingOptions[seeding].available;
 
   if (!t) {
     return (
@@ -83,12 +90,34 @@ export function LetzmrTournamentPage() {
           {format === "GROUP_KO" && (
             <>
               <div className="space-y-1">
-                <Label>Nº grupos (preset 2 ou 4)</Label>
+                <Label>Nº de grupos</Label>
                 <Input value={numGroups} onChange={(e) => setNumGroups(e.target.value)} />
               </div>
               <div className="space-y-1">
                 <Label>Classificados por grupo</Label>
                 <Input value={advancers} onChange={(e) => setAdvancers(e.target.value)} />
+              </div>
+              <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+                <Label>Posição dos classificados na chave</Label>
+                <Select value={seeding} onValueChange={(v) => setSeeding(v as BracketSeeding)}>
+                  <SelectTrigger data-testid="bracket-seeding">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(BRACKET_SEEDING_LABEL) as BracketSeeding[]).map((key) => (
+                      <SelectItem key={key} value={key} disabled={!seedingOptions[key].available}>
+                        {BRACKET_SEEDING_LABEL[key]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  {seedingBlocked
+                    ? seedingOptions[seeding].reason
+                    : seeding === "BY_GROUP"
+                      ? "Cada vaga é fixa por grupo, como no LetzPlay. Disponível para 2 ou 4 grupos (2 classificados)."
+                      : "Os 1ºs colocados são ranqueados entre os grupos e a chave sai desse ranking. Aceita de 2 a 8 grupos (2 classificados), com BYE quando precisar. A chave só é montada com todos os grupos concluídos."}
+                </p>
               </div>
             </>
           )}
@@ -96,7 +125,7 @@ export function LetzmrTournamentPage() {
         {error && <p className="text-sm text-[hsl(var(--destructive))]">{error}</p>}
         <Button
           type="button"
-          disabled={!name.trim()}
+          disabled={!name.trim() || seedingBlocked}
           onClick={() => {
             setError("");
             void run((eng) =>
@@ -105,8 +134,9 @@ export function LetzmrTournamentPage() {
                 name: name.trim(),
                 format,
                 entryType,
-                numGroups: Number(numGroups) || 2,
-                advancersPerGroup: Number(advancers) || 2,
+                numGroups: groupsN,
+                advancersPerGroup: advancersN,
+                bracketSeeding: seeding,
               }),
             )
               .then(() => setName(""))

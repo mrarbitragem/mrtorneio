@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatSetScore,
   isGroupComplete,
-  setScoreParts,
   standingsNeededTieBreak,
 } from "./publicDraw";
 import type { Match, StandingRow } from "./types";
@@ -47,13 +47,17 @@ describe("desempate só quando o saldo de vitórias empata", () => {
   });
 });
 
-describe("placar com tie-break", () => {
-  it("guarda o games e o dígito do tie-break separados", () => {
-    expect(setScoreParts({ gamesA: 6, gamesB: 7, tiebreakA: 5 })).toEqual({
-      gamesA: 6,
-      gamesB: 7,
-      tiebreakA: 5,
-      tiebreakB: undefined,
-    });
+describe("placar público sem dígito de tie-break", () => {
+  it("mostra só os games do set de 6 games (7x6)", () => {
+    expect(formatSetScore({ gamesA: 7, gamesB: 6 })).toBe("7x6");
+  });
+
+  it("mostra só os games do set profissional (9x8)", () => {
+    expect(formatSetScore({ gamesA: 9, gamesB: 8 })).toBe("9x8");
+  });
+
+  it("ignora um dígito de tie-break vindo de dados antigos", () => {
+    const legacy = { gamesA: 7, gamesB: 6, tiebreakB: 5 };
+    expect(formatSetScore(legacy)).toBe("7x6");
   });
 });

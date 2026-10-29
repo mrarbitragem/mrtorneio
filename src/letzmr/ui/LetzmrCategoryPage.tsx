@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { BRACKET_SEEDING_LABEL } from "../domain/bracket";
 import type { CorrectionImpact, Match, ScheduleConflict } from "../domain/types";
 import { useLetzmr } from "./useLetzmr";
 
@@ -37,6 +38,17 @@ export function LetzmrCategoryPage() {
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- store snapshot drives refresh
   }, [store, groups, eng]);
+
+  const crossRanking = useMemo(() => {
+    if (!cat || cat.format !== "GROUP_KO" || cat.bracketSeeding !== "CROSS_RANKING") return null;
+    if (groups.length === 0) return null;
+    try {
+      return eng.getFirstPlaceRanking(cat.id);
+    } catch {
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- store snapshot drives refresh
+  }, [store, cat, groups, eng]);
 
   if (!cat || !tournament) {
     return (
@@ -201,6 +213,11 @@ export function LetzmrCategoryPage() {
             ? ` · ${cat.numGroups} grupos / ${cat.advancersPerGroup} class.`
             : ""}
         </p>
+        {cat.format === "GROUP_KO" && (
+          <p className="text-xs text-[hsl(var(--muted-foreground))]" data-testid="bracket-seeding-label">
+            Chave: {BRACKET_SEEDING_LABEL[cat.bracketSeeding ?? "BY_GROUP"]}
+          </p>
+        )}
       </div>
 
       {(msg || warn) && (
@@ -392,6 +409,103 @@ export function LetzmrCategoryPage() {
           </Button>
         )}
       </section>
+
+      {crossRanking && (
+        <section
+          className="space-y-2 rounded-lg border border-[hsl(var(--border))] p-4"
+          data-testid="cross-ranking"
+        >
+          <h2 className="text-lg font-semibold">Ranking dos 1ºs colocados</h2>
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            Critério: {crossRanking.criteria}.
+            {!crossRanking.allGroupsComplete &&
+              " Parcial: a chave só é montada com todos os grupos concluídos."}
+          </p>
+          <ol className="list-decimal pl-5 text-sm">
+            {crossRanking.orderedGroupIds.map((gid) => {
+              const group = crossRanking.groups.find((g) => g.id === gid);
+              const first = standings
+                .find((s) => s.group.id === gid)
+                ?.ranked.find((r) => r.rank === 1);
+              return (
+                <li key={gid}>
+                  {group?.label}: {first ? nameOf(first.registrationId) : "—"}
+                  {first
+                    ? ` · ${first.wins}V ${first.losses}D · sets ${first.setDiff >= 0 ? "+" : ""}${first.setDiff} · games ${first.gameDiff >= 0 ? "+" : ""}${first.gameDiff}`
+                    : ""}
+                </li>
+              );
+            })}
+          </ol>
+          {crossRanking.allGroupsComplete && crossRanking.tiedGroupIds.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm text-[hsl(var(--destructive))]">
+                Empate entre 1ºs colocados em todos os critérios:{" "}
+                {crossRanking.tiedGroupIds
+                  .map((ids) =>
+                    ids.map((id) => crossRanking.groups.find((g) => g.id === id)?.label).join(" e "),
+                  )
+                  .join("; ")}
+                .
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  void run((e) => e.drawFirstPlaceTie(cat.id))
+                    .then(() => {
+                      setMsg("Desempate dos 1ºs sorteado.");
+                      setWarn("");
+                    })
+                    .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                }}
+              >
+                Sortear desempate dos 1ºs
+              </Button>
+            </div>
+          )}
+          {crossRanking.resolvedByDrawGroupIds.length > 0 && (
+            <div className="space-y-2" data-testid="cross-tie-draw-saved">
+              <p className="text-sm">
+                Empate entre 1ºs resolvido por sorteio gravado
+                {cat.crossTieDrawnAt
+                  ? ` em ${new Date(cat.crossTieDrawnAt).toLocaleString("pt-BR")}`
+                  : ""}
+                :{" "}
+                {crossRanking.resolvedByDrawGroupIds
+                  .map((ids) =>
+                    ids.map((id) => crossRanking.groups.find((g) => g.id === id)?.label).join(" → "),
+                  )
+                  .join("; ")}
+                . O sorteio não muda sozinho.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="redo-cross-tie-draw"
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      "Refazer o sorteio de desempate dos 1ºs? A ordem atual será substituída e, se a chave já estiver montada, os confrontos da 1ª rodada serão remontados.",
+                    )
+                  )
+                    return;
+                  void run((e) => e.drawFirstPlaceTie(cat.id, undefined, { redo: true }))
+                    .then(() => {
+                      setMsg("Sorteio dos 1ºs refeito.");
+                      setWarn("");
+                    })
+                    .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                }}
+              >
+                Refazer sorteio
+              </Button>
+            </div>
+          )}
+        </section>
+      )}
 
       {standings.length > 0 && (
         <section className="space-y-4">

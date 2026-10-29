@@ -5,9 +5,13 @@
 - Group page ordered by place, with the pair as the row.
 - Tie-break written in sentences, and only when the group needed it.
 - Bracket as columns of matches. Round codes R16, QF, SF.
-- Score with a small tie-break digit.
 - Separate generate and publish.
-- Cross-group seeding for 4 groups × 2 qualifiers.
+- Cross-group seeding for 4 groups × 2 qualifiers (the "por grupo" option).
+
+## Differs on purpose
+
+- Score is games only (`7x6`, `9x8`). The owner does not want the tie-break digit.
+- A second seeding option, "ranking cruzado" of group winners, for 2 to 8 groups.
 
 ## Avoid
 

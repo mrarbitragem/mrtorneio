@@ -7,8 +7,8 @@ import {
   groupTieBreakSummary,
   isGroupComplete,
   knockoutRoundTitle,
+  formatSetScore,
   matchNumberIndex,
-  setScoreParts,
   standingsNeededTieBreak,
 } from "../domain/publicDraw";
 import type { Group, LetzmrStore, Match, SetScore, StandingRow } from "../domain/types";
@@ -20,24 +20,7 @@ function pairLines(name: string): string[] {
 }
 
 function ScoreDigits({ set }: { set: SetScore }) {
-  const parts = setScoreParts(set);
-  return (
-    <span data-testid="set-score">
-      <span>
-        {parts.gamesA}
-        {parts.tiebreakA != null && (
-          <sup className="ml-0.5 text-[10px] font-semibold">{parts.tiebreakA}</sup>
-        )}
-      </span>
-      <span className="px-1 text-[hsl(var(--muted-foreground))]">/</span>
-      <span>
-        {parts.gamesB}
-        {parts.tiebreakB != null && (
-          <sup className="ml-0.5 text-[10px] font-semibold">{parts.tiebreakB}</sup>
-        )}
-      </span>
-    </span>
-  );
+  return <span data-testid="set-score">{formatSetScore(set)}</span>;
 }
 
 function MatchLine({
