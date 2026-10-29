@@ -116,7 +116,7 @@ export function PublicCategoryView({
   tournamentName: string;
   categoryName: string;
 }) {
-  const eng = useMemo(() => createEngine(store, { autoLocalPersist: false }), [store]);
+  const eng = useMemo(() => createEngine(store), [store]);
   const groups = store.groups
     .filter((group) => group.categoryId === categoryId)
     .sort((a, b) => a.index - b.index);

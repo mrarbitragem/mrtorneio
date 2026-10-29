@@ -43,24 +43,50 @@ import type {
   StandingRow,
   Tournament,
 } from "../domain/types";
-import { loadStore, saveStore } from "./localStore";
+import { emptyStore } from "./localStore";
 
 export type Engine = ReturnType<typeof createEngine>;
 
 export type EngineOptions = {
-  /** When false, engine keeps state in memory only (outer layer persists). */
-  autoLocalPersist?: boolean;
   organizerId?: string | null;
 };
 
 export function createEngine(initial?: LetzmrStore, options: EngineOptions = {}) {
-  let store: LetzmrStore = initial ?? loadStore();
-  const autoLocalPersist = options.autoLocalPersist !== false;
+  let store: LetzmrStore = initial ?? emptyStore();
   let organizerId = options.organizerId ?? null;
 
-  const persist = () => {
-    if (autoLocalPersist) saveStore(store);
+
+  /** Remove grupos, jogos, placares e sorteios de uma categoria; as inscrições ficam. */
+  const withoutDraw = (s: LetzmrStore, categoryId: string): LetzmrStore => {
+    const groupIds = new Set(s.groups.filter((g) => g.categoryId === categoryId).map((g) => g.id));
+    return {
+      ...s,
+      groups: s.groups.filter((g) => g.categoryId !== categoryId),
+      matches: s.matches.filter((m) => m.categoryId !== categoryId),
+      residualDraws: s.residualDraws.filter((d) => !groupIds.has(d.groupId)),
+      registrations: s.registrations.map((r) =>
+        r.categoryId === categoryId ? { ...r, groupId: undefined } : r,
+      ),
+      categories: s.categories.map((c) =>
+        c.id === categoryId
+          ? { ...c, status: "open", crossTieDrawOrder: undefined, crossTieDrawnAt: undefined }
+          : c,
+      ),
+    };
   };
+
+  /** Tira do cadastro atletas que não aparecem mais em nenhuma inscrição. */
+  const pruneAthletes = (s: LetzmrStore, removedAthleteIds: string[]): LetzmrStore => {
+    const used = new Set(s.registrations.flatMap((r) => r.athleteIds));
+    return {
+      ...s,
+      athletes: s.athletes.filter((a) => used.has(a.id) || !removedAthleteIds.includes(a.id)),
+    };
+  };
+
+  const hasDrawOf = (s: LetzmrStore, categoryId: string) =>
+    s.groups.some((g) => g.categoryId === categoryId) ||
+    s.matches.some((m) => m.categoryId === categoryId);
 
   const api = {
     getStore: () => store,
@@ -70,7 +96,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
     getOrganizerId: () => organizerId,
     replaceStore: (s: LetzmrStore) => {
       store = s;
-      persist();
     },
 
     createTournament: (name: string): Tournament => {
@@ -83,7 +108,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         createdAt: new Date().toISOString(),
       };
       store = { ...store, tournaments: [...store.tournaments, t] };
-      persist();
       return t;
     },
 
@@ -97,7 +121,7 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       bracketSeeding?: BracketSeeding;
     }): Category => {
       if (args.format !== "GROUP_KO" && args.format !== "KO") {
-        throw new Error("Formato fora do MVP");
+        throw new Error("Formato não suportado");
       }
       const numGroups = args.format === "GROUP_KO" ? args.numGroups ?? 2 : 0;
       const advancersPerGroup = args.format === "GROUP_KO" ? args.advancersPerGroup ?? 2 : 0;
@@ -120,7 +144,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         createdAt: new Date().toISOString(),
       };
       store = { ...store, categories: [...store.categories, c] };
-      persist();
       return c;
     },
 
@@ -131,7 +154,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       if (existing) return existing;
       const a: Athlete = { id: newId("ath"), displayName };
       store = { ...store, athletes: [...store.athletes, a] };
-      persist();
       return a;
     },
 
@@ -165,7 +187,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         status: "confirmed",
       };
       store = { ...store, registrations: [...store.registrations, r] };
-      persist();
       return r;
     },
 
@@ -209,7 +230,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         registrations: remaining,
         athletes: store.athletes.filter((a) => used.has(a.id) || !reg.athleteIds.includes(a.id)),
       };
-      persist();
     },
 
     generateDraw: (categoryId: string, rng?: () => number) => {
@@ -219,6 +239,16 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         (r) => r.categoryId === categoryId && r.status === "confirmed",
       );
       if (regs.length < 2) throw new Error("Mínimo 2 inscritos");
+
+      // Valida a regra da chave antes de apagar o sorteio anterior (nada muda se falhar).
+      const pairings =
+        cat.format === "KO"
+          ? []
+          : resolveBracketPairings(
+              cat.numGroups,
+              cat.advancersPerGroup,
+              cat.bracketSeeding ?? "BY_GROUP",
+            );
 
       // Clear previous draw artifacts for category
       store = {
@@ -246,16 +276,8 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
             c.id === categoryId ? { ...c, status: "drawn" } : c,
           ),
         };
-        persist();
         return;
       }
-
-      // Validate preset exists before drawing
-      const pairings = resolveBracketPairings(
-        cat.numGroups,
-        cat.advancersPerGroup,
-        cat.bracketSeeding ?? "BY_GROUP",
-      );
 
       const { groups, registrations: assigned } = assignGroups(
         categoryId,
@@ -284,7 +306,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
             : c,
         ),
       };
-      persist();
     },
 
     getGroupStandings: (groupId: string): {
@@ -317,7 +338,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
             : c,
         ),
       };
-      persist();
       return { match: scored, conflicts: [] };
     },
 
@@ -328,7 +348,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       let matches = store.matches.map((m) => (m.id === matchId ? scored : m));
       matches = advanceWinnerInBracket(matches, scored);
       store = { ...store, matches };
-      persist();
       return scored;
     },
 
@@ -466,7 +485,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       }
 
       store = { ...store, matches };
-      persist();
       return { impact };
     },
 
@@ -538,7 +556,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       // propagate again for chained byes
       matches = propagateByeWinners(matches);
       store = { ...store, matches };
-      persist();
     },
 
     /** Ranking atual dos 1ºs colocados (só faz sentido no modo CROSS_RANKING). */
@@ -606,7 +623,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
             : c,
         ),
       };
-      persist();
       // Se a chave já estava montada, remonta com a nova ordem (sem placar a perder).
       if (hadBracket && ranking.allGroupsComplete) api.materializeBracket(categoryId);
       return order;
@@ -629,7 +645,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
           draw,
         ],
       };
-      persist();
       return draw;
     },
 
@@ -651,7 +666,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
             : m,
         ),
       };
-      persist();
       const conflicts = findCrossCategoryConflicts({
         matches: store.matches,
         registrations: store.registrations,
@@ -668,7 +682,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
           c.id === categoryId ? { ...c, published } : c,
         ),
       };
-      persist();
     },
 
     completeCategory: (categoryId: string) => {
@@ -678,7 +691,6 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
           c.id === categoryId ? { ...c, status: "completed" } : c,
         ),
       };
-      persist();
     },
 
     /**
@@ -709,11 +721,98 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         residualDraws: store.residualDraws.filter((d) => !groupIds.has(d.groupId)),
         athletes: store.athletes.filter((a) => usedAthletes.has(a.id)),
       };
-      persist();
       return {
         categoryIds,
         publishedCategoryIds: cats.filter((c) => c.published).map((c) => c.id),
       };
+    },
+
+    /** Há grupos ou jogos gerados para a categoria? */
+    hasDraw: (categoryId: string) => hasDrawOf(store, categoryId),
+
+    /**
+     * Ajusta nº de grupos, classificados e posição na chave. Se já houve sorteio, ele é
+     * descartado (grupos, jogos e placares) e a categoria volta a "aberta" e despublicada:
+     * é preciso sortear de novo. As inscrições são mantidas.
+     */
+    configureCategory: (
+      categoryId: string,
+      cfg: { numGroups: number; advancersPerGroup: number; bracketSeeding?: BracketSeeding },
+    ): { drawDiscarded: boolean; wasPublished: boolean } => {
+      const cat = store.categories.find((c) => c.id === categoryId);
+      if (!cat) throw new Error("Categoria não encontrada");
+      if (cat.format !== "GROUP_KO") {
+        throw new Error("Só categorias Grupo + Chaves têm grupos para ajustar.");
+      }
+      if (!Number.isInteger(cfg.numGroups) || cfg.numGroups < 1) {
+        throw new Error("Informe um número de grupos válido (1 ou mais).");
+      }
+      if (!Number.isInteger(cfg.advancersPerGroup) || cfg.advancersPerGroup < 0) {
+        throw new Error("Informe um número de classificados válido.");
+      }
+      const seeding: BracketSeeding = cfg.bracketSeeding ?? cat.bracketSeeding ?? "BY_GROUP";
+      // Falha aqui (sem alterar nada) se a regra de chave não existe para a combinação.
+      resolveBracketPairings(cfg.numGroups, cfg.advancersPerGroup, seeding);
+      const drawDiscarded = hasDrawOf(store, categoryId);
+      if (drawDiscarded) store = withoutDraw(store, categoryId);
+      store = {
+        ...store,
+        categories: store.categories.map((c) =>
+          c.id === categoryId
+            ? {
+                ...c,
+                numGroups: cfg.numGroups,
+                advancersPerGroup: cfg.advancersPerGroup,
+                bracketSeeding: seeding,
+                published: drawDiscarded ? false : c.published,
+              }
+            : c,
+        ),
+      };
+      return { drawDiscarded, wasPublished: cat.published };
+    },
+
+    /**
+     * Limpa a categoria: apaga sorteio, jogos e placares (e, se pedido, também as inscrições).
+     * A categoria continua existindo, aberta e despublicada.
+     */
+    clearCategory: (
+      categoryId: string,
+      opts: { removeRegistrations?: boolean } = {},
+    ): { wasPublished: boolean } => {
+      const cat = store.categories.find((c) => c.id === categoryId);
+      if (!cat) throw new Error("Categoria não encontrada");
+      store = withoutDraw(store, categoryId);
+      if (opts.removeRegistrations) {
+        const removed = store.registrations.filter((r) => r.categoryId === categoryId);
+        store = {
+          ...store,
+          registrations: store.registrations.filter((r) => r.categoryId !== categoryId),
+        };
+        store = pruneAthletes(store, removed.flatMap((r) => r.athleteIds));
+      }
+      store = {
+        ...store,
+        categories: store.categories.map((c) =>
+          c.id === categoryId ? { ...c, published: false } : c,
+        ),
+      };
+      return { wasPublished: cat.published };
+    },
+
+    /** Exclui a categoria e tudo o que depende dela. */
+    deleteCategory: (categoryId: string): { wasPublished: boolean } => {
+      const cat = store.categories.find((c) => c.id === categoryId);
+      if (!cat) throw new Error("Categoria não encontrada");
+      store = withoutDraw(store, categoryId);
+      const removed = store.registrations.filter((r) => r.categoryId === categoryId);
+      store = {
+        ...store,
+        categories: store.categories.filter((c) => c.id !== categoryId),
+        registrations: store.registrations.filter((r) => r.categoryId !== categoryId),
+      };
+      store = pruneAthletes(store, removed.flatMap((r) => r.athleteIds));
+      return { wasPublished: cat.published };
     },
 
     regName: (id?: string) =>
@@ -726,14 +825,11 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
 let singleton: Engine | null = null;
 
 export function getEngine(): Engine {
-  if (!singleton) singleton = createEngine(undefined, { autoLocalPersist: false });
+  if (!singleton) singleton = createEngine();
   return singleton;
 }
 
 export function resetEngine(seed?: LetzmrStore, options?: EngineOptions): Engine {
-  singleton = createEngine(seed, {
-    autoLocalPersist: false,
-    ...options,
-  });
+  singleton = createEngine(seed, options);
   return singleton;
 }

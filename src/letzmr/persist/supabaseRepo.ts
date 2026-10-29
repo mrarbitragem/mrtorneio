@@ -83,8 +83,6 @@ export function createSupabasePersistence(args: {
   };
 
   return {
-    mode: "live",
-
     async load() {
       const uid = getUserId();
       if (!uid) {
@@ -100,7 +98,7 @@ export function createSupabasePersistence(args: {
         const blank = emptyStore();
         blank.place = {
           id: `place_${uid.slice(0, 8)}`,
-          name: "LETZMR Place",
+          name: "MRTorneio",
           slug: `org-${uid.slice(0, 8)}`,
         };
         return { store: blank, version: 0 };

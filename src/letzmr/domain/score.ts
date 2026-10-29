@@ -157,7 +157,7 @@ export function analyzeCorrectionImpact(args: {
       .filter((m) => m.round === 1 && m.phase === "KO")
       .map((m) => m.id),
     wouldClearAdvancement: true,
-    // surface that KO scores may persist until cleared (LetzPlay-like unless organizer confirms clear)
+    // surface that KO scores may persist until cleared (unless organizer confirms clear)
     ...(koWithScores.length
       ? {}
       : {}),

@@ -32,7 +32,7 @@ function build(opts: {
   pairs: number;
   seeding?: BracketSeeding;
 }) {
-  const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+  const eng = createEngine(emptyStore());
   const t = eng.createTournament("Estreia");
   const cat = eng.createCategory({
     tournamentId: t.id,
@@ -116,7 +116,7 @@ describe("torneio completo até o campeão", () => {
 
 describe("excluir torneio", () => {
   it("remove só o torneio escolhido e o que depende dele", () => {
-    const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+    const eng = createEngine(emptyStore());
     const keep = eng.createTournament("Fica");
     const drop = eng.createTournament("Sai");
     const mk = (tid: string, names: string[][]) => {
@@ -155,7 +155,7 @@ describe("excluir torneio", () => {
 
 describe("inscrição", () => {
   it("recusa nome vazio e aparar espaços", () => {
-    const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+    const eng = createEngine(emptyStore());
     const t = eng.createTournament("T");
     const c = eng.createCategory({
       tournamentId: t.id,
@@ -174,7 +174,7 @@ describe("inscrição", () => {
 
 describe("remover inscrição", () => {
   it("só antes do sorteio", () => {
-    const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+    const eng = createEngine(emptyStore());
     const t = eng.createTournament("T");
     const c = eng.createCategory({
       tournamentId: t.id,
@@ -203,7 +203,7 @@ describe("remover inscrição", () => {
 
 describe("inscrição em lista", () => {
   function doublesCat() {
-    const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+    const eng = createEngine(emptyStore());
     const t = eng.createTournament("T");
     const c = eng.createCategory({
       tournamentId: t.id,
@@ -238,5 +238,100 @@ describe("inscrição em lista", () => {
     ).toThrow(/Linha 2.*2 nomes/);
     expect(eng.getStore().registrations).toHaveLength(0);
     expect(() => eng.registerMany(c.id, [])).toThrow(/vazia/);
+  });
+});
+
+describe("ajustar, refazer, limpar e excluir categoria", () => {
+  const countOf = (eng: Engine, catId: string) => {
+    const s = eng.getStore();
+    return {
+      groups: s.groups.filter((g) => g.categoryId === catId).length,
+      matches: s.matches.filter((m) => m.categoryId === catId).length,
+      regs: s.registrations.filter((r) => r.categoryId === catId).length,
+    };
+  };
+
+  it("refazer o sorteio apaga placares e recria grupos com as mesmas inscrições", () => {
+    const { eng, cat } = build({ numGroups: 2, advancersPerGroup: 2, pairs: 8 });
+    playAllReady(eng, cat.id, "GROUP");
+    expect(eng.getStore().matches.some((m) => m.status === "played")).toBe(true);
+    eng.generateDraw(cat.id);
+    expect(eng.getStore().matches.some((m) => m.status === "played")).toBe(false);
+    expect(countOf(eng, cat.id).groups).toBe(2);
+    expect(countOf(eng, cat.id).regs).toBe(8);
+    expect(eng.getStore().registrations.every((r) => r.groupId)).toBe(true);
+  });
+
+  it("mudar a quantidade de grupos descarta o sorteio e permite sortear de novo", () => {
+    const { eng, cat } = build({ numGroups: 2, advancersPerGroup: 2, pairs: 8 });
+    playAllReady(eng, cat.id, "GROUP");
+    const res = eng.configureCategory(cat.id, { numGroups: 4, advancersPerGroup: 2 });
+    expect(res.drawDiscarded).toBe(true);
+    expect(countOf(eng, cat.id)).toEqual({ groups: 0, matches: 0, regs: 8 });
+    const after = eng.getStore().categories.find((c) => c.id === cat.id)!;
+    expect(after.numGroups).toBe(4);
+    expect(after.status).toBe("open");
+    expect(eng.hasDraw(cat.id)).toBe(false);
+    eng.generateDraw(cat.id);
+    expect(countOf(eng, cat.id).groups).toBe(4);
+  });
+
+  it("configuração inválida não altera nada", () => {
+    const { eng, cat } = build({ numGroups: 2, advancersPerGroup: 2, pairs: 8 });
+    expect(() => eng.configureCategory(cat.id, { numGroups: 0, advancersPerGroup: 2 })).toThrow();
+    expect(() => eng.configureCategory(cat.id, { numGroups: 9, advancersPerGroup: 2 })).toThrow();
+    expect(eng.hasDraw(cat.id)).toBe(true);
+    expect(eng.getStore().categories.find((c) => c.id === cat.id)!.numGroups).toBe(2);
+  });
+
+  it("de 2 grupos para grupo único (termina no grupo)", () => {
+    const { eng, cat } = build({ numGroups: 2, advancersPerGroup: 2, pairs: 5 });
+    eng.configureCategory(cat.id, { numGroups: 1, advancersPerGroup: 0 });
+    eng.generateDraw(cat.id);
+    const s = eng.getStore();
+    expect(s.groups.filter((g) => g.categoryId === cat.id)).toHaveLength(1);
+    expect(s.matches.filter((m) => m.categoryId === cat.id && m.phase === "KO")).toHaveLength(0);
+    expect(s.matches.filter((m) => m.categoryId === cat.id)).toHaveLength(10);
+  });
+
+  it("limpar mantém as inscrições; limpar tudo remove inscrições e atletas órfãos", () => {
+    const { eng, cat } = build({ numGroups: 2, advancersPerGroup: 2, pairs: 6 });
+    eng.setPublished(cat.id, true);
+    const r1 = eng.clearCategory(cat.id);
+    expect(r1.wasPublished).toBe(true);
+    expect(countOf(eng, cat.id)).toEqual({ groups: 0, matches: 0, regs: 6 });
+    const c = eng.getStore().categories.find((x) => x.id === cat.id)!;
+    expect(c.status).toBe("open");
+    expect(c.published).toBe(false);
+    expect(eng.getStore().registrations.every((r) => r.groupId === undefined)).toBe(true);
+
+    eng.clearCategory(cat.id, { removeRegistrations: true });
+    expect(countOf(eng, cat.id).regs).toBe(0);
+    expect(eng.getStore().athletes).toHaveLength(0);
+    expect(eng.getStore().categories.some((x) => x.id === cat.id)).toBe(true);
+  });
+
+  it("excluir categoria não mexe nas outras do torneio", () => {
+    const { eng, cat } = build({ numGroups: 2, advancersPerGroup: 2, pairs: 6 });
+    const other = eng.createCategory({
+      tournamentId: cat.tournamentId,
+      name: "Outra",
+      format: "GROUP_KO",
+      entryType: "doubles",
+      numGroups: 1,
+      advancersPerGroup: 0,
+    });
+    eng.register({ categoryId: other.id, names: ["Atleta 0A", "Zé"] });
+    eng.register({ categoryId: other.id, names: ["Ana", "Bia"] });
+    eng.generateDraw(other.id);
+    eng.deleteCategory(cat.id);
+    const s = eng.getStore();
+    expect(s.categories.map((c) => c.id)).toEqual([other.id]);
+    expect(s.registrations.every((r) => r.categoryId === other.id)).toBe(true);
+    expect(s.groups.every((g) => g.categoryId === other.id)).toBe(true);
+    expect(s.matches.every((m) => m.categoryId === other.id)).toBe(true);
+    // "Atleta 0A" também jogava na outra categoria e continua cadastrado
+    expect(s.athletes.some((a) => a.displayName === "Atleta 0A")).toBe(true);
+    expect(s.athletes.some((a) => a.displayName === "Atleta 1A")).toBe(false);
   });
 });

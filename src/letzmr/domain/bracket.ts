@@ -140,7 +140,7 @@ function resolveSingleGroup(advancersPerGroup: number): BracketPairing[] {
 
 /**
  * Posicionamento por grupo ("1º G1 × 2º G3"). Só existe para as configurações
- * verificadas no LetzPlay: 2 ou 4 grupos com 2 classificados, ou 3 classificados no total.
+ * suportadas: 2 ou 4 grupos com 2 classificados, ou 3 classificados no total.
  */
 export function resolveBracketPreset(
   numGroups: number,

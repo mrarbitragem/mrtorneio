@@ -16,7 +16,7 @@ export function AppRoutes() {
         <Route path="t/:tournamentId/c/:categoryId" element={<LetzmrCategoryPage />} />
         <Route path="public/:tournamentId/:categoryId" element={<LetzmrPublicPage />} />
       </Route>
-      {/* Compat com rotas do MVP embutido no Academy */}
+      {/* Rotas legadas */}
       <Route path="/letzmr/*" element={<Navigate to="/" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

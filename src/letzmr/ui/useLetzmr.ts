@@ -1,20 +1,16 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { getEngine, type Engine } from "../store/engine";
-import type { LetzmrStore } from "../domain/types";
+import type { BracketSeeding, LetzmrStore } from "../domain/types";
 import {
-  clearDemoSession,
   getSession,
   initLetzmrSession,
-  loadDemoIntoSession,
   persistAfterMutation,
-  reloadLive,
-  setLetzmrMode,
+  reloadSession,
   subscribeSession,
   syncPublishFlags,
   type LetzmrSession,
 } from "../persist/session";
-import type { LetzmrMode } from "../persist/types";
 
 let storeListeners = new Set<() => void>();
 
@@ -55,11 +51,11 @@ export function useLetzmr() {
 
   const run = useCallback(
     async <T,>(fn: (eng: Engine) => T): Promise<T> => {
-      if (session.mode === "live" && !user?.id) {
-        throw new Error("Login de organizador obrigatório para alterar dados reais.");
+      if (!user?.id) {
+        throw new Error("Faça login para alterar os dados.");
       }
       const eng = getEngine();
-      if (session.mode === "live") eng.setOrganizerId(user!.id);
+      eng.setOrganizerId(user.id);
       const result = fn(eng);
       const persistResult = await persistAfterMutation(eng);
       if (persistResult.ok === false) {
@@ -68,48 +64,33 @@ export function useLetzmr() {
       emitStore();
       return result;
     },
-    [session.mode, user],
+    [user],
   );
 
-  const setMode = useCallback(
-    async (mode: LetzmrMode) => {
-      await setLetzmrMode(mode, user?.id ?? null);
+  const publishCategory = useCallback(async (categoryId: string, published: boolean) => {
+    const eng = getEngine();
+    if (!published) {
+      // Tirar do ar: primeiro no servidor. Se falhar, nada muda e o erro aparece.
+      const pub = await syncPublishFlags(eng, categoryId, false);
+      if (pub.ok === false) throw new Error(pub.message);
+      eng.setPublished(categoryId, false);
+      const persistResult = await persistAfterMutation(eng);
+      if (persistResult.ok === false) throw new Error(persistResult.message);
       emitStore();
-    },
-    [user?.id],
-  );
-
-  const loadDemo = useCallback(async () => {
-    await loadDemoIntoSession();
+      return;
+    }
+    eng.setPublished(categoryId, true);
+    const persistResult = await persistAfterMutation(eng);
+    if (persistResult.ok === false) throw new Error(persistResult.message);
+    const pub = await syncPublishFlags(eng, categoryId, true);
+    if (pub.ok === false) throw new Error(pub.message);
     emitStore();
   }, []);
 
-  const hardReset = useCallback(async () => {
-    if (session.mode === "live") {
-      await reloadLive(user?.id ?? null);
-    } else {
-      await clearDemoSession();
-    }
-    emitStore();
-  }, [session.mode, user?.id]);
-
-  const publishCategory = useCallback(
-    async (categoryId: string, published: boolean) => {
-      const eng = getEngine();
-      eng.setPublished(categoryId, published);
-      const persistResult = await persistAfterMutation(eng);
-      if (persistResult.ok === false) throw new Error(persistResult.message);
-      const pub = await syncPublishFlags(eng, categoryId, published);
-      if (pub.ok === false && session.mode === "live") throw new Error(pub.message);
-      emitStore();
-    },
-    [session.mode],
-  );
-
   const deleteTournament = useCallback(
     async (tournamentId: string) => {
-      if (session.mode === "live" && !user?.id) {
-        throw new Error("Login de organizador obrigatório para excluir dados reais.");
+      if (!user?.id) {
+        throw new Error("Faça login para excluir dados.");
       }
       const eng = getEngine();
       // Despublica primeiro: se algo falhar, o torneio continua inteiro e consistente.
@@ -119,18 +100,109 @@ export function useLetzmr() {
         .map((c) => c.id);
       for (const id of publishedIds) {
         const res = await syncPublishFlags(eng, id, false);
-        if (res.ok === false && session.mode === "live") throw new Error(res.message);
+        if (res.ok === false) throw new Error(res.message);
       }
       eng.deleteTournament(tournamentId);
       const persistResult = await persistAfterMutation(eng);
       if (persistResult.ok === false) throw new Error(persistResult.message);
       emitStore();
     },
-    [session.mode, user?.id],
+    [user?.id],
+  );
+
+  const requireUser = () => {
+    if (!user?.id) throw new Error("Faça login para alterar os dados.");
+    return user.id;
+  };
+
+  const categoryIsPublished = (eng: Engine, categoryId: string) =>
+    eng.getStore().categories.some((c) => c.id === categoryId && c.published);
+
+  /**
+   * Operações que invalidam a página pública (apagar, limpar, mudar grupos): tira a consulta
+   * do ar antes de mexer. Se a gravação falhar, a categoria continua inteira e consistente.
+   */
+  const deleteCategory = useCallback(
+    async (categoryId: string) => {
+      const uid = requireUser();
+      const eng = getEngine();
+      eng.setOrganizerId(uid);
+      if (categoryIsPublished(eng, categoryId)) {
+        const res = await syncPublishFlags(eng, categoryId, false);
+        if (res.ok === false) throw new Error(res.message);
+      }
+      eng.deleteCategory(categoryId);
+      const persistResult = await persistAfterMutation(eng);
+      if (persistResult.ok === false) throw new Error(persistResult.message);
+      emitStore();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user?.id],
+  );
+
+  const clearCategory = useCallback(
+    async (categoryId: string, opts: { removeRegistrations?: boolean } = {}) => {
+      const uid = requireUser();
+      const eng = getEngine();
+      eng.setOrganizerId(uid);
+      if (categoryIsPublished(eng, categoryId)) {
+        const res = await syncPublishFlags(eng, categoryId, false);
+        if (res.ok === false) throw new Error(res.message);
+      }
+      eng.clearCategory(categoryId, opts);
+      const persistResult = await persistAfterMutation(eng);
+      if (persistResult.ok === false) throw new Error(persistResult.message);
+      emitStore();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user?.id],
+  );
+
+  const configureCategory = useCallback(
+    async (
+      categoryId: string,
+      cfg: { numGroups: number; advancersPerGroup: number; bracketSeeding?: BracketSeeding },
+    ) => {
+      const uid = requireUser();
+      const eng = getEngine();
+      eng.setOrganizerId(uid);
+      const willDiscard = eng.hasDraw(categoryId);
+      if (willDiscard && categoryIsPublished(eng, categoryId)) {
+        const res = await syncPublishFlags(eng, categoryId, false);
+        if (res.ok === false) throw new Error(res.message);
+      }
+      const result = eng.configureCategory(categoryId, cfg);
+      const persistResult = await persistAfterMutation(eng);
+      if (persistResult.ok === false) throw new Error(persistResult.message);
+      emitStore();
+      return result;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user?.id],
+  );
+
+  /** Refaz o sorteio. Se a categoria está publicada, a consulta pública é atualizada. */
+  const redrawCategory = useCallback(
+    async (categoryId: string) => {
+      const uid = requireUser();
+      const eng = getEngine();
+      eng.setOrganizerId(uid);
+      const wasPublished = categoryIsPublished(eng, categoryId);
+      eng.generateDraw(categoryId);
+      const persistResult = await persistAfterMutation(eng);
+      if (persistResult.ok === false) throw new Error(persistResult.message);
+      if (wasPublished) {
+        const res = await syncPublishFlags(eng, categoryId, true);
+        if (res.ok === false) throw new Error(res.message);
+      }
+      emitStore();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user?.id],
   );
 
   const reload = useCallback(async () => {
-    await reloadLive(user?.id ?? null);
+    await reloadSession(user?.id ?? null);
     emitStore();
   }, [user?.id]);
 
@@ -140,11 +212,12 @@ export function useLetzmr() {
     authLoading,
     user,
     run,
-    setMode,
-    loadDemo,
-    hardReset,
     publishCategory,
     deleteTournament,
+    deleteCategory,
+    clearCategory,
+    configureCategory,
+    redrawCategory,
     reload,
     eng: getEngine(),
   };

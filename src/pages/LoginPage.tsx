@@ -24,8 +24,8 @@ export default function LoginPage() {
       <div className="mx-auto max-w-md space-y-4 p-8">
         <h1 className="text-xl font-bold">MRTorneio — Login</h1>
         <p className="text-sm text-muted-foreground">
-          Configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` no `.env` (projeto
-          Supabase novo). Enquanto isso, use o modo Demo local na home.
+          O sistema ainda não está configurado: faltam as variáveis `VITE_SUPABASE_URL` e
+          `VITE_SUPABASE_PUBLISHABLE_KEY`.
         </p>
         <Button asChild>
           <Link to="/">Voltar</Link>
@@ -39,7 +39,7 @@ export default function LoginPage() {
       <div>
         <h1 className="text-xl font-bold">MRTorneio — Entrar</h1>
         <p className="text-sm text-muted-foreground">
-          Conta do Supabase (projeto dedicado ao MRTorneio).
+          Acesso restrito a organizadores autorizados.
         </p>
       </div>
       <form

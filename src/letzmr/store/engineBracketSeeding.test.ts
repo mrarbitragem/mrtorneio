@@ -5,7 +5,7 @@ import { emptyStore } from "./localStore";
 import type { BracketSeeding } from "../domain/types";
 
 function setup(numGroups: number, seeding: BracketSeeding) {
-  const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+  const eng = createEngine(emptyStore());
   const t = eng.createTournament("Teste");
   const cat = eng.createCategory({
     tournamentId: t.id,
@@ -50,7 +50,7 @@ function groupOf(eng: Engine, regId?: string): number | undefined {
 
 describe("criação de categoria com regra de chave", () => {
   it("recusa posicionamento por grupo para 3 grupos", () => {
-    const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+    const eng = createEngine(emptyStore());
     const t = eng.createTournament("T");
     expect(() =>
       eng.createCategory({
@@ -66,7 +66,7 @@ describe("criação de categoria com regra de chave", () => {
   });
 
   it("assume por grupo quando a regra não é informada", () => {
-    const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+    const eng = createEngine(emptyStore());
     const t = eng.createTournament("T");
     const c = eng.createCategory({
       tournamentId: t.id,
@@ -264,7 +264,7 @@ describe("regra por grupo segue valendo", () => {
 
 describe("grupo único (5 duplas)", () => {
   function singleGroup(advancersPerGroup: number) {
-    const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+    const eng = createEngine(emptyStore());
     const t = eng.createTournament("T");
     const cat = eng.createCategory({
       tournamentId: t.id,
@@ -302,7 +302,7 @@ describe("grupo único (5 duplas)", () => {
   });
 
   it("recusa 1 classificado com um grupo só", () => {
-    const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+    const eng = createEngine(emptyStore());
     const t = eng.createTournament("T");
     expect(() =>
       eng.createCategory({

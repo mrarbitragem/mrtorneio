@@ -1,4 +1,4 @@
-/** LETZMR domain types — MVP G+C + KO */
+/** Tipos de domínio: Grupo + Chaves (G+C) e eliminatória. */
 
 export type CategoryFormat = "GROUP_KO" | "KO";
 export type CategoryStatus = "draft" | "open" | "drawn" | "in_progress" | "completed";
@@ -26,7 +26,7 @@ export interface Tournament {
 
 /**
  * Como os classificados entram na chave:
- * - BY_GROUP: posição fixa por grupo ("1º G1 × 2º G3"), como no LetzPlay.
+ * - BY_GROUP: posição fixa por grupo ("1º G1 × 2º G3").
  * - CROSS_RANKING: os 1ºs colocados são ranqueados entre os grupos
  *   ("1º melhor 1º × 2º do 3º melhor 1º", 4 grupos), como no protótipo Árbitro BT.
  */

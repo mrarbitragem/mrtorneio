@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { emptyStore } from "../store/localStore";
 import { createSupabasePersistence } from "./supabaseRepo";
-import { createDemoPersistence, DEMO_KEY, LEGACY_LOCAL_KEY } from "./demoStore";
-import { seedDemoTournament } from "../demo/seedDemo";
 
 function mockClient(handlers: {
   selectState?: () => { data: unknown; error: null | { message: string; code?: string } };
@@ -46,18 +44,6 @@ function mockClient(handlers: {
   });
   return { from } as never;
 }
-
-describe("demo separada do live", () => {
-  it("grava só em letzmr:demo:v1", async () => {
-    localStorage.clear();
-    const demo = createDemoPersistence();
-    const store = seedDemoTournament();
-    const r = await demo.save(store, 0);
-    expect(r.ok).toBe(true);
-    expect(localStorage.getItem(DEMO_KEY)).toBeTruthy();
-    expect(localStorage.getItem(LEGACY_LOCAL_KEY)).toBeNull();
-  });
-});
 
 describe("auth gate na camada de gravação", () => {
   it("recusa save sem user", async () => {

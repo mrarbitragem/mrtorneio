@@ -1,31 +1,56 @@
 import { supabase } from "@/data/client";
 import type { Engine } from "../store/engine";
 import { resetEngine } from "../store/engine";
-import { seedDemoTournament } from "../demo/seedDemo";
 import { emptyStore } from "../store/localStore";
-import { isLetzmrLiveConfigured, readStoredMode, writeStoredMode } from "./config";
-import { clearDemoStore, createDemoPersistence } from "./demoStore";
+import { isLetzmrLiveConfigured } from "./config";
 import { createSupabasePersistence } from "./supabaseRepo";
-import type { LetzmrMode, LetzmrPersistence, PersistResult } from "./types";
+import type { LetzmrPersistence, PersistResult } from "./types";
 
 export type LetzmrSession = {
-  mode: LetzmrMode;
   version: number;
   userId: string | null;
   persistence: LetzmrPersistence;
   status: "idle" | "loading" | "ready" | "error";
   lastError: string | null;
-  liveConfigured: boolean;
+  /** false quando as variáveis VITE_SUPABASE_* não estão configuradas. */
+  configured: boolean;
 };
 
+const NOT_CONFIGURED =
+  "Supabase não configurado: defina VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.";
+
+/** Usada só quando o Supabase não está configurado: nada é gravado. */
+function unavailablePersistence(): LetzmrPersistence {
+  const fail = async (): Promise<PersistResult> => ({
+    ok: false,
+    code: "not_configured",
+    message: NOT_CONFIGURED,
+  });
+  return {
+    async load() {
+      return { store: emptyStore(), version: 0 };
+    },
+    save: fail,
+    publishCategory: fail,
+    unpublishCategory: fail,
+    async loadPublicCategory() {
+      return null;
+    },
+  };
+}
+
+function buildPersistence(userId: string | null): LetzmrPersistence {
+  if (!supabase || !isLetzmrLiveConfigured()) return unavailablePersistence();
+  return createSupabasePersistence({ client: supabase, getUserId: () => userId });
+}
+
 let session: LetzmrSession = {
-  mode: readStoredMode(),
   version: 0,
   userId: null,
-  persistence: createDemoPersistence(),
+  persistence: unavailablePersistence(),
   status: "idle",
   lastError: null,
-  liveConfigured: isLetzmrLiveConfigured(),
+  configured: isLetzmrLiveConfigured(),
 };
 
 const listeners = new Set<() => void>();
@@ -43,57 +68,43 @@ export function getSession(): LetzmrSession {
   return session;
 }
 
-function buildPersistence(mode: LetzmrMode, userId: string | null): LetzmrPersistence {
-  if (mode === "demo" || !supabase) return createDemoPersistence();
-  return createSupabasePersistence({
-    client: supabase,
-    getUserId: () => userId,
-  });
-}
-
 export async function initLetzmrSession(userId: string | null): Promise<Engine> {
-  session = {
-    ...session,
-    userId,
-    liveConfigured: isLetzmrLiveConfigured(),
-    status: "loading",
-    lastError: null,
-  };
+  const configured = isLetzmrLiveConfigured();
+  session = { ...session, userId, configured, status: "loading", lastError: null };
   emit();
 
-  const mode = session.mode === "live" && !session.liveConfigured ? "demo" : session.mode;
-  if (mode !== session.mode) {
-    session = { ...session, mode };
-    writeStoredMode(mode);
-  }
-
-  if (mode === "live" && !userId) {
+  if (!configured) {
     session = {
       ...session,
-      persistence: buildPersistence("live", null),
-      status: "ready",
+      persistence: unavailablePersistence(),
+      status: "error",
       version: 0,
-      lastError: "Entre com sua conta para usar persistência Supabase.",
+      lastError: NOT_CONFIGURED,
     };
-    const eng = resetEngine(emptyStore(), { autoLocalPersist: false, organizerId: null });
+    const eng = resetEngine(emptyStore(), { organizerId: null });
     emit();
     return eng;
   }
 
-  const persistence = buildPersistence(mode, userId);
-  try {
-    const { store, version } = await persistence.load();
+  // Sem login não há dados de organizador para carregar.
+  if (!userId) {
     session = {
       ...session,
-      persistence,
-      version,
+      persistence: buildPersistence(null),
       status: "ready",
+      version: 0,
       lastError: null,
     };
-    const eng = resetEngine(store, {
-      autoLocalPersist: false,
-      organizerId: mode === "live" ? userId : null,
-    });
+    const eng = resetEngine(emptyStore(), { organizerId: null });
+    emit();
+    return eng;
+  }
+
+  const persistence = buildPersistence(userId);
+  try {
+    const { store, version } = await persistence.load();
+    session = { ...session, persistence, version, status: "ready", lastError: null };
+    const eng = resetEngine(store, { organizerId: userId });
     emit();
     return eng;
   } catch (e) {
@@ -101,33 +112,19 @@ export async function initLetzmrSession(userId: string | null): Promise<Engine> 
       ...session,
       persistence,
       status: "error",
-      lastError: e instanceof Error ? e.message : "Falha ao carregar LETZMR",
+      lastError: e instanceof Error ? e.message : "Falha ao carregar os dados",
     };
     emit();
-    return resetEngine(emptyStore(), {
-      autoLocalPersist: false,
-      organizerId: mode === "live" ? userId : null,
-    });
+    return resetEngine(emptyStore(), { organizerId: userId });
   }
-}
-
-export async function setLetzmrMode(mode: LetzmrMode, userId: string | null): Promise<Engine> {
-  writeStoredMode(mode);
-  session = { ...session, mode };
-  return initLetzmrSession(userId);
 }
 
 export async function persistAfterMutation(eng: Engine): Promise<PersistResult> {
-  const { persistence, version, mode, userId } = session;
-  if (mode === "live" && !userId) {
-    return {
-      ok: false,
-      code: "unauthorized",
-      message: "Login obrigatório para gravar.",
-    };
+  const { persistence, version, userId } = session;
+  if (!userId) {
+    return { ok: false, code: "unauthorized", message: "Login obrigatório para gravar." };
   }
-  const store = eng.getStore();
-  const result = await persistence.save(store, version);
+  const result = await persistence.save(eng.getStore(), version);
   if (result.ok === true) {
     session = { ...session, version: result.version, lastError: null };
   } else {
@@ -145,45 +142,6 @@ export async function syncPublishFlags(eng: Engine, categoryId: string, publishe
   return persistence.unpublishCategory(categoryId);
 }
 
-export async function loadDemoIntoSession(): Promise<Engine> {
-  writeStoredMode("demo");
-  session = {
-    ...session,
-    mode: "demo",
-    persistence: createDemoPersistence(),
-    status: "ready",
-    lastError: null,
-  };
-  const seeded = seedDemoTournament();
-  const eng = resetEngine(seeded, { autoLocalPersist: false, organizerId: null });
-  clearDemoStore();
-  const persistence = createDemoPersistence();
-  session = { ...session, persistence };
-  const saved = await persistence.save(eng.getStore(), 0);
-  session = {
-    ...session,
-    version: saved.ok ? saved.version : 1,
-  };
-  emit();
-  return eng;
-}
-
-export async function clearDemoSession(): Promise<Engine> {
-  clearDemoStore();
-  writeStoredMode("demo");
-  session = {
-    ...session,
-    mode: "demo",
-    persistence: createDemoPersistence(),
-    version: 0,
-    status: "ready",
-    lastError: null,
-  };
-  const eng = resetEngine(emptyStore(), { autoLocalPersist: false, organizerId: null });
-  emit();
-  return eng;
-}
-
-export async function reloadLive(userId: string | null): Promise<Engine> {
+export async function reloadSession(userId: string | null): Promise<Engine> {
   return initLetzmrSession(userId);
 }

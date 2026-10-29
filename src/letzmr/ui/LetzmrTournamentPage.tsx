@@ -16,7 +16,7 @@ import { useLetzmr } from "./useLetzmr";
 
 export function LetzmrTournamentPage() {
   const { tournamentId } = useParams();
-  const { store, run } = useLetzmr();
+  const { store, run, publishCategory } = useLetzmr();
   const t = store.tournaments.find((x) => x.id === tournamentId);
   const cats = store.categories.filter((c) => c.tournamentId === tournamentId);
 
@@ -59,7 +59,7 @@ export function LetzmrTournamentPage() {
       <section className="space-y-3 rounded-lg border border-[hsl(var(--border))] p-4">
         <h2 className="text-lg font-semibold">Nova categoria</h2>
         <p className="text-xs text-[hsl(var(--muted-foreground))]">
-          Formatos MVP: Grupo + Chaves (G+C) ou Eliminatória direta. Equipe / Rainha não disponíveis.
+          Formatos: Grupo + Chaves (G+C) ou Eliminatória direta.
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-1">
@@ -147,7 +147,7 @@ export function LetzmrTournamentPage() {
                   {seedingBlocked
                     ? seedingOptions[seeding].reason
                     : seeding === "BY_GROUP"
-                      ? "Cada vaga é fixa por grupo, como no LetzPlay. Disponível para 2 ou 4 grupos (2 classificados)."
+                      ? "Cada vaga é fixa por grupo. Disponível para 2 ou 4 grupos (2 classificados)."
                       : "Os 1ºs colocados são ranqueados entre os grupos e a chave sai desse ranking. Aceita de 2 a 8 grupos (2 classificados), com BYE quando precisar. A chave só é montada com todos os grupos concluídos."}
                 </p>
               </div>
@@ -195,6 +195,22 @@ export function LetzmrTournamentPage() {
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  {c.published && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      type="button"
+                      data-testid="unpublish-category"
+                      onClick={() => {
+                        setError("");
+                        void publishCategory(c.id, false).catch((e) =>
+                          setError(e instanceof Error ? e.message : "Erro"),
+                        );
+                      }}
+                    >
+                      Despublicar
+                    </Button>
+                  )}
                   {c.published && (
                     <Button asChild size="sm" variant="outline">
                       <Link to={`/public/${t.id}/${c.id}`}>Público</Link>

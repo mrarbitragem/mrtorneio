@@ -14,7 +14,7 @@ import {
 } from "./bracket";
 import type { Group, Match, StandingRow } from "./types";
 
-describe("regra por grupo (LetzPlay) continua igual", () => {
+describe("regra por grupo continua igual", () => {
   it("usa os presets verificados", () => {
     expect(resolveBracketPairings(2, 2, "BY_GROUP")).toBe(PRESET_N2_ADV2);
     expect(resolveBracketPairings(4, 2, "BY_GROUP")).toBe(PRESET_N4_ADV2);

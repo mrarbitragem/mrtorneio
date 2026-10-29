@@ -7,7 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { parseRegistrationList } from "../domain/registrationList";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { BRACKET_SEEDING_LABEL } from "../domain/bracket";
-import type { CorrectionImpact, Match, ScheduleConflict } from "../domain/types";
+import type {
+  CorrectionImpact,
+  Match,
+  ScheduleConflict,
+} from "../domain/types";
+import { CategorySetupPanel } from "./CategorySetupPanel";
 import { useLetzmr } from "./useLetzmr";
 
 export function LetzmrCategoryPage() {
@@ -31,8 +36,12 @@ export function LetzmrCategoryPage() {
   const [impact, setImpact] = useState<CorrectionImpact | null>(null);
   const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ScheduleConflict[]>([]);
-  const [scoreDraft, setScoreDraft] = useState<Record<string, { a: string; b: string }>>({});
-  const [scheduleDraft, setScheduleDraft] = useState<Record<string, string>>({});
+  const [scoreDraft, setScoreDraft] = useState<
+    Record<string, { a: string; b: string }>
+  >({});
+  const [scheduleDraft, setScheduleDraft] = useState<Record<string, string>>(
+    {},
+  );
 
   const parsedList = useMemo(
     () => parseRegistrationList(listText, cat?.entryType ?? "doubles"),
@@ -48,7 +57,12 @@ export function LetzmrCategoryPage() {
   }, [store, groups, eng]);
 
   const crossRanking = useMemo(() => {
-    if (!cat || cat.format !== "GROUP_KO" || cat.bracketSeeding !== "CROSS_RANKING") return null;
+    if (
+      !cat ||
+      cat.format !== "GROUP_KO" ||
+      cat.bracketSeeding !== "CROSS_RANKING"
+    )
+      return null;
     if (groups.length === 0) return null;
     try {
       return eng.getFirstPlaceRanking(cat.id);
@@ -73,7 +87,8 @@ export function LetzmrCategoryPage() {
   const renderMatchRow = (m: Match) => {
     const draft = scoreDraft[m.id] ?? { a: "6", b: "3" };
     const when = scheduleDraft[m.id] ?? m.scheduledAt?.slice(0, 16) ?? "";
-    const played = m.status === "played" || m.status === "wo" || m.status === "bye";
+    const played =
+      m.status === "played" || m.status === "wo" || m.status === "bye";
     return (
       <div
         key={m.id}
@@ -87,9 +102,13 @@ export function LetzmrCategoryPage() {
           </p>
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
             {m.phase} R{m.round} #{m.position} · {m.status}
-            {m.winnerRegistrationId ? ` · vencedor: ${nameOf(m.winnerRegistrationId)}` : ""}
+            {m.winnerRegistrationId
+              ? ` · vencedor: ${nameOf(m.winnerRegistrationId)}`
+              : ""}
             {m.score?.woSide ? " · W.O." : ""}
-            {m.scheduledAt ? ` · ${new Date(m.scheduledAt).toLocaleString()}` : ""}
+            {m.scheduledAt
+              ? ` · ${new Date(m.scheduledAt).toLocaleString()}`
+              : ""}
             {m.court ? ` · ${m.court}` : ""}
           </p>
         </div>
@@ -101,7 +120,10 @@ export function LetzmrCategoryPage() {
                   className="w-14"
                   value={draft.a}
                   onChange={(e) =>
-                    setScoreDraft((s) => ({ ...s, [m.id]: { ...draft, a: e.target.value } }))
+                    setScoreDraft((s) => ({
+                      ...s,
+                      [m.id]: { ...draft, a: e.target.value },
+                    }))
                   }
                   aria-label="Games A"
                 />
@@ -110,7 +132,10 @@ export function LetzmrCategoryPage() {
                   className="w-14"
                   value={draft.b}
                   onChange={(e) =>
-                    setScoreDraft((s) => ({ ...s, [m.id]: { ...draft, b: e.target.value } }))
+                    setScoreDraft((s) => ({
+                      ...s,
+                      [m.id]: { ...draft, b: e.target.value },
+                    }))
                   }
                   aria-label="Games B"
                 />
@@ -128,7 +153,9 @@ export function LetzmrCategoryPage() {
                       setMsg("Placar lançado.");
                       setWarn("");
                     })
-                    .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                    .catch((err) =>
+                      setWarn(err instanceof Error ? err.message : "Erro"),
+                    );
                 }}
               >
                 Placar
@@ -140,7 +167,9 @@ export function LetzmrCategoryPage() {
                 onClick={() => {
                   void run((e) => e.recordWo(m.id, "A"))
                     .then(() => setMsg("W.O. para lado A."))
-                    .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                    .catch((err) =>
+                      setWarn(err instanceof Error ? err.message : "Erro"),
+                    );
                 }}
               >
                 W.O. A
@@ -152,7 +181,9 @@ export function LetzmrCategoryPage() {
                 onClick={() => {
                   void run((e) => e.recordWo(m.id, "B"))
                     .then(() => setMsg("W.O. para lado B."))
-                    .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                    .catch((err) =>
+                      setWarn(err instanceof Error ? err.message : "Erro"),
+                    );
                 }}
               >
                 W.O. B
@@ -178,7 +209,9 @@ export function LetzmrCategoryPage() {
               type="datetime-local"
               className="w-48"
               value={when}
-              onChange={(e) => setScheduleDraft((s) => ({ ...s, [m.id]: e.target.value }))}
+              onChange={(e) =>
+                setScheduleDraft((s) => ({ ...s, [m.id]: e.target.value }))
+              }
             />
             <Button
               size="sm"
@@ -196,7 +229,9 @@ export function LetzmrCategoryPage() {
                         : "Horário salvo.",
                     );
                   })
-                  .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                  .catch((err) =>
+                    setWarn(err instanceof Error ? err.message : "Erro"),
+                  );
               }}
             >
               Agendar
@@ -218,21 +253,64 @@ export function LetzmrCategoryPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-bold">{cat.name}</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
-          {cat.format === "GROUP_KO" ? "G+C" : "Eliminatória"} · {cat.entryType} · {cat.status}
+          {cat.format === "GROUP_KO" ? "G+C" : "Eliminatória"} · {cat.entryType}{" "}
+          · {cat.status}
           {cat.format === "GROUP_KO"
             ? singleGroup
               ? cat.advancersPerGroup === 0
                 ? " · grupo único (termina no grupo)"
                 : " · grupo único + final (1º × 2º)"
-            : ` · ${cat.numGroups} grupos / ${cat.advancersPerGroup} class.`
+              : ` · ${cat.numGroups} grupos / ${cat.advancersPerGroup} class.`
             : ""}
         </p>
         {cat.format === "GROUP_KO" && !singleGroup && (
-          <p className="text-xs text-[hsl(var(--muted-foreground))]" data-testid="bracket-seeding-label">
+          <p
+            className="text-xs text-[hsl(var(--muted-foreground))]"
+            data-testid="bracket-seeding-label"
+          >
             Chave: {BRACKET_SEEDING_LABEL[cat.bracketSeeding ?? "BY_GROUP"]}
           </p>
         )}
       </div>
+
+      {cat.published && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+          data-testid="published-banner"
+        >
+          <span>
+            <strong>No ar:</strong> os atletas estão vendo esta categoria. Os
+            resultados novos só aparecem depois de “Atualizar página pública”.
+          </span>
+          <span className="flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link to={`/public/${tournamentId}/${categoryId}`}>
+                Ver página pública
+              </Link>
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              type="button"
+              data-testid="unpublish"
+              onClick={() => {
+                void publishCategory(cat.id, false)
+                  .then(() => {
+                    setMsg(
+                      "Página pública fora do ar. Ajuste o que precisar e publique de novo.",
+                    );
+                    setWarn("");
+                  })
+                  .catch((err) =>
+                    setWarn(err instanceof Error ? err.message : "Erro"),
+                  );
+              }}
+            >
+              Despublicar (tirar do ar)
+            </Button>
+          </span>
+        </div>
+      )}
 
       {(msg || warn) && (
         <Alert variant={warn ? "destructive" : "default"}>
@@ -250,7 +328,9 @@ export function LetzmrCategoryPage() {
                 <li key={i}>{c.message}</li>
               ))}
             </ul>
-            <p className="mt-1 text-xs">Agendamento permitido (não bloqueante).</p>
+            <p className="mt-1 text-xs">
+              Agendamento permitido (não bloqueante).
+            </p>
           </AlertDescription>
         </Alert>
       )}
@@ -258,7 +338,9 @@ export function LetzmrCategoryPage() {
       {impact && pendingCancelId && (
         <Alert variant={impact.divergenceWarning ? "destructive" : "default"}>
           <AlertTitle>
-            {impact.divergenceWarning ? "Divergência pós-correção" : "Confirmar cancelamento"}
+            {impact.divergenceWarning
+              ? "Divergência pós-correção"
+              : "Confirmar cancelamento"}
           </AlertTitle>
           <AlertDescription className="space-y-3">
             <p>{impact.message}</p>
@@ -276,9 +358,13 @@ export function LetzmrCategoryPage() {
                     .then(() => {
                       setImpact(null);
                       setPendingCancelId(null);
-                      setMsg("Resultado cancelado (só placar — avanços mantidos).");
+                      setMsg(
+                        "Resultado cancelado (só placar — avanços mantidos).",
+                      );
                     })
-                    .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                    .catch((err) =>
+                      setWarn(err instanceof Error ? err.message : "Erro"),
+                    );
                 }}
               >
                 Só placar (não limpar avanço)
@@ -299,7 +385,9 @@ export function LetzmrCategoryPage() {
                       setPendingCancelId(null);
                       setMsg("Resultado cancelado e avanços limpos.");
                     })
-                    .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                    .catch((err) =>
+                      setWarn(err instanceof Error ? err.message : "Erro"),
+                    );
                 }}
               >
                 Atleta/classificação errada (limpar avanço)
@@ -337,7 +425,9 @@ export function LetzmrCategoryPage() {
             type="button"
             onClick={() => {
               const names =
-                cat.entryType === "doubles" ? [p1.trim(), p2.trim()] : [p1.trim()];
+                cat.entryType === "doubles"
+                  ? [p1.trim(), p2.trim()]
+                  : [p1.trim()];
               void run((e) => e.register({ categoryId: cat.id, names }))
                 .then(() => {
                   setP1("");
@@ -345,7 +435,9 @@ export function LetzmrCategoryPage() {
                   setMsg("Inscrito.");
                   setWarn("");
                 })
-                .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                .catch((err) =>
+                  setWarn(err instanceof Error ? err.message : "Erro"),
+                );
             }}
           >
             Inscrever
@@ -374,17 +466,25 @@ export function LetzmrCategoryPage() {
             A numeração no começo da linha é opcional.
           </p>
           {listText.trim() && (
-            <div className="space-y-1 text-sm" data-testid="registration-list-preview">
+            <div
+              className="space-y-1 text-sm"
+              data-testid="registration-list-preview"
+            >
               {parsedList.errors.length === 0 ? (
                 <p>
                   {parsedList.entries.length}{" "}
-                  {parsedList.entries.length === 1 ? "inscrição pronta" : "inscrições prontas"}.
+                  {parsedList.entries.length === 1
+                    ? "inscrição pronta"
+                    : "inscrições prontas"}
+                  .
                 </p>
               ) : (
                 <>
                   <p className="text-[hsl(var(--destructive))]">
-                    Corrija {parsedList.errors.length === 1 ? "a linha" : "as linhas"} abaixo para
-                    inscrever (nada é inscrito enquanto houver erro):
+                    Corrija{" "}
+                    {parsedList.errors.length === 1 ? "a linha" : "as linhas"}{" "}
+                    abaixo para inscrever (nada é inscrito enquanto houver
+                    erro):
                   </p>
                   <ul className="list-disc pl-5 text-[hsl(var(--destructive))]">
                     {parsedList.errors.map((er) => (
@@ -397,7 +497,8 @@ export function LetzmrCategoryPage() {
               )}
               {parsedList.repeatedNames.length > 0 && (
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                  Atenção: nome repetido na lista: {parsedList.repeatedNames.join(", ")}.
+                  Atenção: nome repetido na lista:{" "}
+                  {parsedList.repeatedNames.join(", ")}.
                 </p>
               )}
             </div>
@@ -407,7 +508,9 @@ export function LetzmrCategoryPage() {
             variant="secondary"
             data-testid="register-list"
             disabled={
-              !listText.trim() || parsedList.errors.length > 0 || parsedList.entries.length === 0
+              !listText.trim() ||
+              parsedList.errors.length > 0 ||
+              parsedList.entries.length === 0
             }
             onClick={() => {
               void run((e) => e.registerMany(cat.id, parsedList.entries))
@@ -416,7 +519,9 @@ export function LetzmrCategoryPage() {
                   setMsg(`${created.length} inscrição(ões) feita(s).`);
                   setWarn("");
                 })
-                .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                .catch((err) =>
+                  setWarn(err instanceof Error ? err.message : "Erro"),
+                );
             }}
           >
             Inscrever lista
@@ -445,7 +550,9 @@ export function LetzmrCategoryPage() {
                         setMsg("Inscrição removida.");
                         setWarn("");
                       })
-                      .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                      .catch((err) =>
+                        setWarn(err instanceof Error ? err.message : "Erro"),
+                      );
                   }}
                 >
                   Remover
@@ -457,19 +564,24 @@ export function LetzmrCategoryPage() {
       </section>
 
       <section className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          onClick={() => {
-            void run((e) => e.generateDraw(cat.id))
-              .then(() => {
-                setMsg("Grupos/chave gerados.");
-                setWarn("");
-              })
-              .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
-          }}
-        >
-          Gerar jogos
-        </Button>
+        {/* Com sorteio já feito, o botão é "Refazer sorteio" (com confirmação) em Ajustes. */}
+        {matches.length === 0 && groups.length === 0 && (
+          <Button
+            type="button"
+            onClick={() => {
+              void run((e) => e.generateDraw(cat.id))
+                .then(() => {
+                  setMsg("Grupos/chave gerados.");
+                  setWarn("");
+                })
+                .catch((err) =>
+                  setWarn(err instanceof Error ? err.message : "Erro"),
+                );
+            }}
+          >
+            Gerar jogos
+          </Button>
+        )}
         {cat.format === "GROUP_KO" && hasKnockout && (
           <Button
             type="button"
@@ -480,7 +592,9 @@ export function LetzmrCategoryPage() {
                   setMsg("Chave materializada com classificados.");
                   setWarn("");
                 })
-                .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                .catch((err) =>
+                  setWarn(err instanceof Error ? err.message : "Erro"),
+                );
             }}
           >
             {singleGroup ? "Montar final" : "Materializar eliminatória"}
@@ -489,15 +603,22 @@ export function LetzmrCategoryPage() {
         <Button
           type="button"
           variant="outline"
+          data-testid="publish"
           onClick={() => {
-            void publishCategory(cat.id, !cat.published)
+            void publishCategory(cat.id, true)
               .then(() =>
-                setMsg(cat.published ? "Despublicada." : "Publicada para consulta RO."),
+                setMsg(
+                  cat.published
+                    ? "Página pública atualizada com os resultados atuais."
+                    : "Publicada para consulta dos atletas.",
+                ),
               )
-              .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+              .catch((err) =>
+                setWarn(err instanceof Error ? err.message : "Erro"),
+              );
           }}
         >
-          {cat.published ? "Despublicar" : "Publicar as chaves"}
+          {cat.published ? "Atualizar página pública" : "Publicar as chaves"}
         </Button>
         <Button
           type="button"
@@ -505,17 +626,23 @@ export function LetzmrCategoryPage() {
           onClick={() => {
             void run((e) => e.completeCategory(cat.id))
               .then(() => setMsg("Categoria concluída."))
-              .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+              .catch((err) =>
+                setWarn(err instanceof Error ? err.message : "Erro"),
+              );
           }}
         >
           Concluir categoria
         </Button>
         {cat.published && (
           <Button asChild variant="link">
-            <Link to={`/public/${tournamentId}/${categoryId}`}>Ver consulta pública</Link>
+            <Link to={`/public/${tournamentId}/${categoryId}`}>
+              Ver consulta pública
+            </Link>
           </Button>
         )}
       </section>
+
+      <CategorySetupPanel key={cat.id} cat={cat} tournamentId={tournament.id} />
 
       {crossRanking && (
         <section
@@ -544,34 +671,42 @@ export function LetzmrCategoryPage() {
               );
             })}
           </ol>
-          {crossRanking.allGroupsComplete && crossRanking.tiedGroupIds.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm text-[hsl(var(--destructive))]">
-                Empate entre 1ºs colocados em todos os critérios:{" "}
-                {crossRanking.tiedGroupIds
-                  .map((ids) =>
-                    ids.map((id) => crossRanking.groups.find((g) => g.id === id)?.label).join(" e "),
-                  )
-                  .join("; ")}
-                .
-              </p>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  void run((e) => e.drawFirstPlaceTie(cat.id))
-                    .then(() => {
-                      setMsg("Desempate dos 1ºs sorteado.");
-                      setWarn("");
-                    })
-                    .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
-                }}
-              >
-                Sortear desempate dos 1ºs
-              </Button>
-            </div>
-          )}
+          {crossRanking.allGroupsComplete &&
+            crossRanking.tiedGroupIds.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm text-[hsl(var(--destructive))]">
+                  Empate entre 1ºs colocados em todos os critérios:{" "}
+                  {crossRanking.tiedGroupIds
+                    .map((ids) =>
+                      ids
+                        .map(
+                          (id) =>
+                            crossRanking.groups.find((g) => g.id === id)?.label,
+                        )
+                        .join(" e "),
+                    )
+                    .join("; ")}
+                  .
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    void run((e) => e.drawFirstPlaceTie(cat.id))
+                      .then(() => {
+                        setMsg("Desempate dos 1ºs sorteado.");
+                        setWarn("");
+                      })
+                      .catch((err) =>
+                        setWarn(err instanceof Error ? err.message : "Erro"),
+                      );
+                  }}
+                >
+                  Sortear desempate dos 1ºs
+                </Button>
+              </div>
+            )}
           {crossRanking.resolvedByDrawGroupIds.length > 0 && (
             <div className="space-y-2" data-testid="cross-tie-draw-saved">
               <p className="text-sm">
@@ -582,7 +717,12 @@ export function LetzmrCategoryPage() {
                 :{" "}
                 {crossRanking.resolvedByDrawGroupIds
                   .map((ids) =>
-                    ids.map((id) => crossRanking.groups.find((g) => g.id === id)?.label).join(" → "),
+                    ids
+                      .map(
+                        (id) =>
+                          crossRanking.groups.find((g) => g.id === id)?.label,
+                      )
+                      .join(" → "),
                   )
                   .join("; ")}
                 . O sorteio não muda sozinho.
@@ -599,12 +739,16 @@ export function LetzmrCategoryPage() {
                     )
                   )
                     return;
-                  void run((e) => e.drawFirstPlaceTie(cat.id, undefined, { redo: true }))
+                  void run((e) =>
+                    e.drawFirstPlaceTie(cat.id, undefined, { redo: true }),
+                  )
                     .then(() => {
                       setMsg("Sorteio dos 1ºs refeito.");
                       setWarn("");
                     })
-                    .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                    .catch((err) =>
+                      setWarn(err instanceof Error ? err.message : "Erro"),
+                    );
                 }}
               >
                 Refazer sorteio
@@ -637,7 +781,9 @@ export function LetzmrCategoryPage() {
                             ),
                           )
                           .catch((err) =>
-                            setWarn(err instanceof Error ? err.message : "Erro"),
+                            setWarn(
+                              err instanceof Error ? err.message : "Erro",
+                            ),
                           );
                       }}
                     >
@@ -660,18 +806,25 @@ export function LetzmrCategoryPage() {
                   </thead>
                   <tbody>
                     {ranked.map((r) => (
-                      <tr key={r.registrationId} className="border-b border-[hsl(var(--border))]/60">
+                      <tr
+                        key={r.registrationId}
+                        className="border-b border-[hsl(var(--border))]/60"
+                      >
                         <td className="py-1 pr-2">{r.rank}</td>
-                        <td className="py-1 pr-2">{nameOf(r.registrationId)}</td>
+                        <td className="py-1 pr-2">
+                          {nameOf(r.registrationId)}
+                        </td>
                         <td className="py-1 pr-2">
                           {r.wins}-{r.losses}
                         </td>
                         <td className="py-1 pr-2">
-                          {r.setsFor}/{r.setsAgainst} ({r.setDiff >= 0 ? "+" : ""}
+                          {r.setsFor}/{r.setsAgainst} (
+                          {r.setDiff >= 0 ? "+" : ""}
                           {r.setDiff})
                         </td>
                         <td className="py-1 pr-2">
-                          {r.gamesFor}/{r.gamesAgainst} ({r.gameDiff >= 0 ? "+" : ""}
+                          {r.gamesFor}/{r.gamesAgainst} (
+                          {r.gameDiff >= 0 ? "+" : ""}
                           {r.gameDiff})
                         </td>
                         <td className="py-1 pr-2 text-xs">{r.rankSource}</td>

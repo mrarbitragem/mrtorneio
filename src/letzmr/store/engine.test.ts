@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyStore } from "./localStore";
 import { createEngine } from "./engine";
 
-describe("CT-FMT-01 — formatos MVP", () => {
+describe("CT-FMT-01 — formatos", () => {
   it("aceita GROUP_KO e KO; rejeita outros", () => {
     const eng = createEngine(emptyStore());
     const t = eng.createTournament("Lab");
@@ -14,7 +14,7 @@ describe("CT-FMT-01 — formatos MVP", () => {
 describe("fluxo G+C N=2 + correções", () => {
   it("CT-PROG-N2 + CT-COR-PLACAR / CT-COR-ATLETA", () => {
     const eng = createEngine(emptyStore());
-    const t = eng.createTournament("Demo");
+    const t = eng.createTournament("Torneio");
     const c = eng.createCategory({
       tournamentId: t.id,
       name: "SF A",
