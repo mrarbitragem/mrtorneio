@@ -17,20 +17,19 @@ function colorFor(text: string): string {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
+/** Primeira letra do nome do atleta. */
 function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  const first = name.trim().charAt(0);
+  return first ? first.toUpperCase() : "?";
 }
 
 function PairAvatars({ names }: { names: string[] }) {
   return (
-    <div className="hidden shrink-0 -space-x-2 sm:flex" aria-hidden="true">
+    <div className="hidden shrink-0 -space-x-1.5 sm:flex" aria-hidden="true">
       {names.slice(0, 2).map((n) => (
         <span
           key={n}
-          className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[11px] font-semibold text-white ${colorFor(n)}`}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-white text-sm font-semibold text-white ${colorFor(n)}`}
         >
           {initials(n)}
         </span>
