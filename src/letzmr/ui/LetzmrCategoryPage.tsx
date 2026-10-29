@@ -95,12 +95,13 @@ export function LetzmrCategoryPage() {
   const hasKnockout = cat.format === "KO" || cat.advancersPerGroup > 0;
 
   const renderMatchRow = (m: Match) => {
-    const draft = scoreDraft[m.id] ?? { a: "0", b: "0" };
-    const gamesA = Number(draft.a);
-    const gamesB = Number(draft.b);
+    const draft = scoreDraft[m.id] ?? { a: "", b: "" };
+    // Campo em branco vale 0, desde que o outro lado esteja preenchido.
+    const filled = draft.a.trim() !== "" || draft.b.trim() !== "";
+    const gamesA = draft.a.trim() === "" ? 0 : Number(draft.a);
+    const gamesB = draft.b.trim() === "" ? 0 : Number(draft.b);
     const scoreValid =
-      draft.a.trim() !== "" &&
-      draft.b.trim() !== "" &&
+      filled &&
       Number.isInteger(gamesA) &&
       Number.isInteger(gamesB) &&
       gamesA >= 0 &&
@@ -146,6 +147,7 @@ export function LetzmrCategoryPage() {
                     }))
                   }
                   aria-label="Games A"
+                  placeholder="0"
                   inputMode="numeric"
                   onFocus={(e) => e.target.select()}
                 />
@@ -160,6 +162,7 @@ export function LetzmrCategoryPage() {
                     }))
                   }
                   aria-label="Games B"
+                  placeholder="0"
                   inputMode="numeric"
                   onFocus={(e) => e.target.select()}
                 />
@@ -859,7 +862,6 @@ export function LetzmrCategoryPage() {
                         <th className="py-1 pr-2">V-D</th>
                         <th className="py-1 pr-2">Sets</th>
                         <th className="py-1 pr-2">Games</th>
-                        <th className="py-1 pr-2">Origem</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -885,7 +887,6 @@ export function LetzmrCategoryPage() {
                             {r.gameDiff >= 0 ? "+" : ""}
                             {r.gameDiff})
                           </td>
-                          <td className="py-1 pr-2 text-xs">{r.rankSource}</td>
                         </tr>
                       ))}
                     </tbody>

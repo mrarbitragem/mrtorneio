@@ -4,7 +4,7 @@ import { supabase } from "@/data/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   formatScheduleWhen,
-  formatSetScore,
+  describeMatchResult,
   groupPhaseLabel,
   knockoutRoundTitle,
 } from "../domain/publicDraw";
@@ -46,7 +46,7 @@ function buildAgenda(snaps: PublicCategorySnapshot[]): AgendaItem[] {
         phase: m.phase === "GROUP" ? groupPhaseLabel(group) : knockoutRoundTitle(koSize),
         left: m.sideAId ? eng.regName(m.sideAId) : (m.placeholderA ?? "A definir"),
         right: m.sideBId ? eng.regName(m.sideBId) : (m.placeholderB ?? "A definir"),
-        result: m.score?.woSide ? "W.O." : (m.score?.sets.map(formatSetScore).join(" ") ?? ""),
+        result: describeMatchResult(m, (id) => eng.regName(id)) ?? "",
       });
     }
   }

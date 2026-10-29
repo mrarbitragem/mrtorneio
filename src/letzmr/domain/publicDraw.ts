@@ -42,6 +42,26 @@ export function formatSetScore(set: SetScore): string {
   return `${set.gamesA}x${set.gamesB}`;
 }
 
+/**
+ * Resultado em frase para a consulta pública: "Ana / Bia vence 6x3".
+ * O placar sai sempre do ponto de vista de quem venceu. Sem resultado, devolve null.
+ */
+export function describeMatchResult(
+  match: Pick<Match, "sideAId" | "sideBId" | "winnerRegistrationId" | "score" | "status">,
+  nameOf: (id?: string) => string,
+): string | null {
+  if (match.status === "bye" || !match.winnerRegistrationId || !match.score) return null;
+  const winner = nameOf(match.winnerRegistrationId);
+  if (match.score.woSide) return `${winner} vence por W.O.`;
+  const winnerIsB = match.winnerRegistrationId === match.sideBId;
+  const sets = match.score.sets
+    .map((set) =>
+      formatSetScore(winnerIsB ? { ...set, gamesA: set.gamesB, gamesB: set.gamesA } : set),
+    )
+    .join(" ");
+  return sets ? `${winner} vence ${sets}` : `${winner} vence`;
+}
+
 export function matchNumberIndex(matches: Match[], groups: Group[]): Map<string, number> {
   const groupOrder = new Map(groups.map((group) => [group.id, group.index]));
   const sorted = [...matches].sort((a, b) => {
@@ -63,6 +83,15 @@ export function knockoutRoundTitle(matchCount: number): string {
   if (matchCount === 2) return "SF";
   if (matchCount === 1) return "Final";
   return `${matchCount} jogos`;
+}
+
+/** Título da coluna da chave, por extenso: "Oitavas", "Quartas", "Semifinal", "Final". */
+export function knockoutRoundLabel(matchCount: number): string {
+  if (matchCount >= 8) return "Oitavas de final";
+  if (matchCount === 4) return "Quartas de final";
+  if (matchCount === 2) return "Semifinal";
+  if (matchCount === 1) return "Final";
+  return `Rodada (${matchCount} jogos)`;
 }
 
 export function groupPhaseLabel(group: Group | undefined): string {

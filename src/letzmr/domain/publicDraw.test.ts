@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  describeMatchResult,
   formatSetScore,
   isGroupComplete,
   standingsNeededTieBreak,
@@ -59,5 +60,39 @@ describe("placar público sem dígito de tie-break", () => {
   it("ignora um dígito de tie-break vindo de dados antigos", () => {
     const legacy = { gamesA: 7, gamesB: 6, tiebreakB: 5 };
     expect(formatSetScore(legacy)).toBe("7x6");
+  });
+});
+
+describe("describeMatchResult", () => {
+  const names: Record<string, string> = { a: "Ana / Bia", b: "Carla / Dani" };
+  const nameOf = (id?: string) => (id ? names[id] : "—");
+  const base = { sideAId: "a", sideBId: "b" } as const;
+
+  it("lado A vence: placar na ordem natural", () => {
+    expect(
+      describeMatchResult(
+        { ...base, status: "played", winnerRegistrationId: "a", score: { sets: [{ gamesA: 6, gamesB: 3 }], recordedAt: "" } },
+        nameOf,
+      ),
+    ).toBe("Ana / Bia vence 6x3");
+  });
+
+  it("lado B vence: placar virado para o ponto de vista do vencedor", () => {
+    expect(
+      describeMatchResult(
+        { ...base, status: "played", winnerRegistrationId: "b", score: { sets: [{ gamesA: 2, gamesB: 6 }], recordedAt: "" } },
+        nameOf,
+      ),
+    ).toBe("Carla / Dani vence 6x2");
+  });
+
+  it("W.O. e jogo sem resultado", () => {
+    expect(
+      describeMatchResult(
+        { ...base, status: "wo", winnerRegistrationId: "b", score: { sets: [], woSide: "B", recordedAt: "" } },
+        nameOf,
+      ),
+    ).toBe("Carla / Dani vence por W.O.");
+    expect(describeMatchResult({ ...base, status: "scheduled" }, nameOf)).toBeNull();
   });
 });

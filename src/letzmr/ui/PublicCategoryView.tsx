@@ -7,20 +7,18 @@ import {
   groupTieBreakSummary,
   isGroupComplete,
   knockoutRoundTitle,
-  formatSetScore,
+  describeMatchResult,
   matchNumberIndex,
   standingsNeededTieBreak,
 } from "../domain/publicDraw";
 import type { Group, LetzmrStore, Match, SetScore, StandingRow } from "../domain/types";
 import { createEngine } from "../store/engine";
+import { PublicBracket } from "./PublicBracket";
+import { PublicGroupTable } from "./PublicGroupTable";
 
 function pairLines(name: string): string[] {
   const parts = name.split(" / ").map((part) => part.trim()).filter(Boolean);
   return parts.length > 0 ? parts : ["A definir"];
-}
-
-function ScoreDigits({ set }: { set: SetScore }) {
-  return <span data-testid="set-score">{formatSetScore(set)}</span>;
 }
 
 function MatchLine({
@@ -36,6 +34,7 @@ function MatchLine({
 }) {
   const left = nameOf(match.sideAId, match.placeholderA);
   const right = nameOf(match.sideBId, match.placeholderB);
+  const result = describeMatchResult(match, (id) => nameOf(id));
   return (
     <article className="border-b border-[hsl(var(--border))] py-3 text-sm" data-testid="match-line">
       <p className="text-xs text-[hsl(var(--muted-foreground))]">
@@ -53,55 +52,12 @@ function MatchLine({
           ))}
         </div>
       </div>
-      {match.score?.woSide ? (
-        <p className="mt-1 text-xs">W.O.</p>
-      ) : (
-        match.score?.sets.map((set, index) => (
-          <p key={index} className="mt-1 font-medium">
-            <ScoreDigits set={set} />
-          </p>
-        ))
-      )}
-    </article>
-  );
-}
-
-function PlaceRow({
-  row,
-  name,
-  open,
-  onToggle,
-}: {
-  row: StandingRow;
-  name: string;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="border-b border-[hsl(var(--border))] py-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          {pairLines(name).map((line) => (
-            <p key={line} className="text-sm font-medium">
-              {line}
-            </p>
-          ))}
-        </div>
-        <div className="text-right">
-          <p className="text-sm font-semibold">{row.rank}º</p>
-          <button type="button" className="text-xs underline" onClick={onToggle}>
-            ver infos
-          </button>
-        </div>
-      </div>
-      {open && (
-        <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
-          {row.wins}V {row.losses}D · sets {row.setDiff >= 0 ? "+" : ""}
-          {row.setDiff} · games {row.gameDiff >= 0 ? "+" : ""}
-          {row.gameDiff}
+      {result && (
+        <p className="mt-2 font-semibold" data-testid="match-result">
+          {result}
         </p>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -123,7 +79,6 @@ export function PublicCategoryView({
   const matches = store.matches.filter((match) => match.categoryId === categoryId);
   const numbers = useMemo(() => matchNumberIndex(matches, groups), [matches, groups]);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
-  const [infoOpen, setInfoOpen] = useState<Record<string, boolean>>({});
   const [rulesOpen, setRulesOpen] = useState<Record<string, boolean>>({});
 
   const nameOf = (id?: string, placeholder?: string) =>
@@ -163,8 +118,6 @@ export function PublicCategoryView({
               onToggleMatches={() =>
                 setOpenGroups((current) => ({ ...current, [group.id]: !current[group.id] }))
               }
-              infoOpen={infoOpen}
-              onToggleInfo={(id) => setInfoOpen((current) => ({ ...current, [id]: !current[id] }))}
               rulesOpen={Boolean(rulesOpen[group.id])}
               onToggleRules={() =>
                 setRulesOpen((current) => ({ ...current, [group.id]: !current[group.id] }))
@@ -174,27 +127,11 @@ export function PublicCategoryView({
         </TabsContent>
 
         <TabsContent value="chave">
-          <div className="flex gap-4 overflow-x-auto pb-2" data-testid="ko-bracket">
-            {koRounds.map((round) => {
-              const column = matches
-                .filter((match) => match.phase === "KO" && match.round === round)
-                .sort((a, b) => a.position - b.position);
-              return (
-                <section key={round} className="min-w-64 flex-1" data-testid="ko-column">
-                  <h2 className="mb-2 text-sm font-semibold">{knockoutRoundTitle(column.length)}</h2>
-                  {column.map((match) => (
-                    <MatchLine
-                      key={match.id}
-                      match={match}
-                      number={numbers.get(match.id) ?? match.position}
-                      phase={knockoutRoundTitle(column.length)}
-                      nameOf={nameOf}
-                    />
-                  ))}
-                </section>
-              );
-            })}
-          </div>
+          <PublicBracket
+            matches={matches.filter((match) => match.phase === "KO")}
+            numbers={numbers}
+            nameOf={nameOf}
+          />
         </TabsContent>
 
         <TabsContent value="horarios">
@@ -213,8 +150,6 @@ function GroupBlock({
   nameOf,
   matchesOpen,
   onToggleMatches,
-  infoOpen,
-  onToggleInfo,
   rulesOpen,
   onToggleRules,
 }: {
@@ -225,8 +160,6 @@ function GroupBlock({
   nameOf: (id?: string, placeholder?: string) => string;
   matchesOpen: boolean;
   onToggleMatches: () => void;
-  infoOpen: Record<string, boolean>;
-  onToggleInfo: (id: string) => void;
   rulesOpen: boolean;
   onToggleRules: () => void;
 }) {
@@ -257,16 +190,7 @@ function GroupBlock({
           </ul>
         </div>
       )}
-      <p className="text-xs text-[hsl(var(--muted-foreground))]">Posição</p>
-      {ranked.map((row) => (
-        <PlaceRow
-          key={row.registrationId}
-          row={row}
-          name={nameOf(row.registrationId)}
-          open={Boolean(infoOpen[row.registrationId])}
-          onToggle={() => onToggleInfo(row.registrationId)}
-        />
-      ))}
+      <PublicGroupTable rows={ranked} nameOf={(id) => nameOf(id)} />
       {complete ? (
         <p className="mt-3 text-sm">
           Os jogos do {label} estão concluídos.{" "}
