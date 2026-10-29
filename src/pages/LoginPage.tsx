@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { isSupabaseConfigured } from "@/env/supabasePublic";
 
 function safeRedirect(raw: string | null): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/";
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/painel";
   return raw;
 }
 
@@ -108,7 +108,7 @@ export default function LoginPage() {
         </Button>
       </form>
       <Button asChild variant="link">
-        <Link to="/">Voltar ao app</Link>
+        <Link to="/">Voltar aos torneios</Link>
       </Button>
     </div>
   );

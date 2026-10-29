@@ -1,3 +1,5 @@
+import { cleanName } from "./names";
+
 export type EntryType = "singles" | "doubles";
 
 export interface RegistrationListError {
@@ -18,9 +20,6 @@ export interface ParsedRegistrationList {
 /** Tira a numeração do começo: "1. ", "2) ", "3 - ", "4 ". */
 const LEADING_NUMBER = /^\s*\d+(?:\s*[.)\-–:]\s*|\s+)/;
 
-function cleanName(raw: string): string {
-  return raw.replace(/\s+/g, " ").trim();
-}
 
 /**
  * Lê uma lista de inscrições, uma por linha, ex.:
@@ -35,7 +34,8 @@ export function parseRegistrationList(text: string, entryType: EntryType): Parse
   const seen = new Map<string, number>();
 
   text.split(/\r?\n/).forEach((rawLine, index) => {
-    const original = rawLine.trim();
+    // Invisíveis (ex.: U+2060 do WhatsApp) atrapalham a numeração e as letras iniciais.
+    const original = cleanName(rawLine);
     if (!original) return;
     const line = index + 1;
     const body = original.replace(LEADING_NUMBER, "");

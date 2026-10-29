@@ -86,7 +86,7 @@ export function LetzmrTournamentPage() {
   if (!t) {
     return (
       <p>
-        Torneio não encontrado. <Link to="/">Voltar</Link>
+        Torneio não encontrado. <Link to="/painel">Voltar</Link>
       </p>
     );
   }
@@ -94,7 +94,7 @@ export function LetzmrTournamentPage() {
   return (
     <div className="space-y-8">
       <div>
-        <Link to="/" className="text-sm text-[hsl(var(--muted-foreground))] hover:underline">
+        <Link to="/painel" className="text-sm text-[hsl(var(--muted-foreground))] hover:underline">
           ← Torneios
         </Link>
         <h1 className="mt-2 text-2xl font-bold">{t.name}</h1>

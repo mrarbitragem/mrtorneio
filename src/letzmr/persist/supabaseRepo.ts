@@ -1,7 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LetzmrStore } from "../domain/types";
 import { emptyStore } from "../store/localStore";
-import type { LetzmrPersistence, PersistResult, PublicCategorySnapshot } from "./types";
+import type {
+  LetzmrPersistence,
+  PersistResult,
+  PublicCategorySnapshot,
+  PublicTournamentSummary,
+} from "./types";
 
 export type OrganizerStateRow = {
   organizer_id: string;
@@ -228,6 +233,37 @@ export function createSupabasePersistence(args: {
       if (error) throw new Error(error.message);
       if (!data) return null;
       return toPublicSnapshot(data);
+    },
+
+    async listPublicTournaments(): Promise<PublicTournamentSummary[]> {
+      const { data, error } = await client
+        .from("letzmr_public_categories")
+        .select("category_id,tournament_id,tournament_name,category_name,published_at")
+        .order("published_at", { ascending: false });
+      if (error) throw new Error(error.message);
+      const byTournament = new Map<string, PublicTournamentSummary>();
+      for (const row of data ?? []) {
+        const id = row.tournament_id as string;
+        const publishedAt = row.published_at as string;
+        const current = byTournament.get(id) ?? {
+          tournamentId: id,
+          tournamentName: row.tournament_name as string,
+          categories: [],
+          updatedAt: publishedAt,
+        };
+        current.categories.push({
+          categoryId: row.category_id as string,
+          categoryName: row.category_name as string,
+        });
+        if (publishedAt > current.updatedAt) current.updatedAt = publishedAt;
+        byTournament.set(id, current);
+      }
+      return [...byTournament.values()]
+        .map((t) => ({
+          ...t,
+          categories: t.categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName)),
+        }))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     },
 
     async loadPublicTournament(tournamentId): Promise<PublicCategorySnapshot[]> {

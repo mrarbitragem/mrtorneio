@@ -1,14 +1,15 @@
+import { cleanName } from "../domain/names";
 import type { StandingRow } from "../domain/types";
 
 const AVATAR_COLORS = [
-  "bg-pink-400",
-  "bg-purple-500",
-  "bg-sky-400",
-  "bg-orange-400",
-  "bg-teal-400",
-  "bg-indigo-400",
-  "bg-rose-400",
-  "bg-emerald-500",
+  "bg-pink-600",
+  "bg-purple-600",
+  "bg-sky-600",
+  "bg-orange-600",
+  "bg-teal-600",
+  "bg-indigo-600",
+  "bg-rose-600",
+  "bg-emerald-600",
 ];
 
 function colorFor(text: string): string {
@@ -19,7 +20,7 @@ function colorFor(text: string): string {
 
 /** Primeira letra do nome do atleta. */
 function initials(name: string): string {
-  const first = name.trim().charAt(0);
+  const first = cleanName(name).charAt(0);
   return first ? first.toUpperCase() : "?";
 }
 

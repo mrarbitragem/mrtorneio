@@ -85,7 +85,7 @@ export function LetzmrCategoryPage() {
   if (!cat || !tournament) {
     return (
       <p>
-        Categoria não encontrada. <Link to="/">Voltar</Link>
+        Categoria não encontrada. <Link to="/painel">Voltar</Link>
       </p>
     );
   }

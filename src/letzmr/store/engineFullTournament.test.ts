@@ -421,3 +421,32 @@ describe("cancelar resultado", () => {
     expect([next().sideAId, next().sideBId]).not.toContain(ko.sideAId);
   });
 });
+
+describe("nomes com caracteres invisíveis", () => {
+  it("register limpa o nome e o armazenamento antigo é normalizado ao carregar", () => {
+    const eng = createEngine(emptyStore());
+    const t = eng.createTournament("T");
+    const cat = eng.createCategory({
+      tournamentId: t.id,
+      name: "C",
+      format: "GROUP_KO",
+      entryType: "doubles",
+      numGroups: 1,
+      advancersPerGroup: 0,
+    });
+    const reg = eng.register({ categoryId: cat.id, names: ["\u2060 \u2060Guilherme", "Daniel\u200b"] });
+    expect(reg.displayName).toBe("Guilherme / Daniel");
+
+    // dado antigo, já gravado sujo
+    const dirty = eng.getStore();
+    const sujo = {
+      ...dirty,
+      registrations: dirty.registrations.map((r) => ({ ...r, displayName: "\u2060 \u2060Guilherme / Daniel" })),
+      athletes: dirty.athletes.map((a) => ({ ...a, displayName: "\u2060" + a.displayName })),
+    };
+    const loaded = createEngine(sujo);
+    expect(loaded.getStore().registrations[0].displayName).toBe("Guilherme / Daniel");
+    expect(loaded.regName(reg.id)).toBe("Guilherme / Daniel");
+    expect(loaded.getStore().athletes.map((a) => a.displayName)).toEqual(["Guilherme", "Daniel"]);
+  });
+});

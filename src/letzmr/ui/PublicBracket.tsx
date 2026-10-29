@@ -82,17 +82,18 @@ function MatchCard({
       className="w-full rounded-md border border-[hsl(var(--border))] bg-white text-sm shadow-sm"
       data-testid="ko-match"
     >
-      <header className="flex items-center justify-between border-b border-[hsl(var(--border))] px-2 py-1 text-[11px] text-[hsl(var(--muted-foreground))]">
-        <span>Jogo #{number}</span>
-        {match.court && <span>{match.court}</span>}
+      <header className="border-b border-[hsl(var(--border))] px-2 py-1 text-[11px] text-[hsl(var(--muted-foreground))]">
+        Jogo #{number}
       </header>
       <SideRow match={match} side="A" nameOf={nameOf} />
       <SideRow match={match} side="B" nameOf={nameOf} />
-      {match.scheduledAt && (
-        <footer className="border-t border-[hsl(var(--border))] px-2 py-1 text-[11px] text-[hsl(var(--muted-foreground))]">
-          {formatScheduleWhen(match.scheduledAt)}
-        </footer>
-      )}
+      <footer
+        className="border-t border-[hsl(var(--border))] px-2 py-1 text-[11px] text-[hsl(var(--muted-foreground))]"
+        data-testid="ko-when"
+      >
+        {match.scheduledAt ? formatScheduleWhen(match.scheduledAt) : "Data e horário a definir"}
+        {match.court ? ` · ${match.court}` : ""}
+      </footer>
     </article>
   );
 }

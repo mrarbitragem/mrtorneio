@@ -63,3 +63,15 @@ describe("lista de inscrições", () => {
     expect(r.repeatedNames).toEqual(["Ana"]);
   });
 });
+
+describe("caracteres invisíveis (colar do WhatsApp/notas)", () => {
+  it("remove U+2060 e outros invisíveis dos nomes e da numeração", () => {
+    const text = "\u20601. \u2060Guilherme\u2060 / \u200eDaniel\n2) Zuza\u00a0/\u2060Carlos";
+    const r = parseRegistrationList(text, "doubles");
+    expect(r.errors).toEqual([]);
+    expect(r.entries).toEqual([
+      ["Guilherme", "Daniel"],
+      ["Zuza", "Carlos"],
+    ]);
+  });
+});

@@ -39,6 +39,9 @@ function unavailablePersistence(): LetzmrPersistence {
     async loadPublicTournament() {
       return [];
     },
+    async listPublicTournaments() {
+      return [];
+    },
   };
 }
 

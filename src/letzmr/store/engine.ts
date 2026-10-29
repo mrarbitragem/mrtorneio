@@ -43,6 +43,7 @@ import type {
   StandingRow,
   Tournament,
 } from "../domain/types";
+import { cleanName } from "../domain/names";
 import { emptyStore } from "./localStore";
 
 export type Engine = ReturnType<typeof createEngine>;
@@ -51,8 +52,24 @@ export type EngineOptions = {
   organizerId?: string | null;
 };
 
+/** Limpa caracteres invisíveis dos nomes já gravados (só cria objetos novos se algo mudar). */
+function normalizeNames(s: LetzmrStore): LetzmrStore {
+  const athletes = s.athletes.map((a) => {
+    const name = cleanName(a.displayName);
+    return name === a.displayName ? a : { ...a, displayName: name };
+  });
+  const registrations = s.registrations.map((r) => {
+    const name = cleanName(r.displayName);
+    return name === r.displayName ? r : { ...r, displayName: name };
+  });
+  const changed =
+    athletes.some((a, i) => a !== s.athletes[i]) ||
+    registrations.some((r, i) => r !== s.registrations[i]);
+  return changed ? { ...s, athletes, registrations } : s;
+}
+
 export function createEngine(initial?: LetzmrStore, options: EngineOptions = {}) {
-  let store: LetzmrStore = initial ?? emptyStore();
+  let store: LetzmrStore = normalizeNames(initial ?? emptyStore());
   let organizerId = options.organizerId ?? null;
 
 
@@ -170,14 +187,14 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       if (cat.entryType === "singles" && args.names.length !== 1) {
         throw new Error("Simples exige 1 atleta");
       }
-      if (args.names.some((n) => !n.trim())) {
+      if (args.names.some((n) => !cleanName(n))) {
         throw new Error(
           cat.entryType === "doubles"
             ? "Informe o nome dos 2 atletas da dupla."
             : "Informe o nome do atleta.",
         );
       }
-      const athletes = args.names.map((n) => api.ensureAthlete(n.trim()));
+      const athletes = args.names.map((n) => api.ensureAthlete(cleanName(n)));
       const r: Registration = {
         id: newId("reg"),
         categoryId: args.categoryId,
