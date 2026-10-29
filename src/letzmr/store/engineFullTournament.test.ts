@@ -335,3 +335,55 @@ describe("ajustar, refazer, limpar e excluir categoria", () => {
     expect(s.athletes.some((a) => a.displayName === "Atleta 1A")).toBe(false);
   });
 });
+
+describe("programar todos os horários de um grupo", () => {
+  it("programa só os jogos não disputados e preserva os já jogados", () => {
+    const { eng, cat } = build({ numGroups: 1, advancersPerGroup: 0, pairs: 5 });
+    const g = eng.getStore().groups.find((x) => x.categoryId === cat.id)!;
+    const first = eng.getStore().matches.find((m) => m.groupId === g.id)!;
+    eng.recordScore(first.id, [{ gamesA: 6, gamesB: 2 }]);
+    const res = eng.scheduleGroup(g.id, {
+      startAt: "2026-11-07T12:00:00.000Z",
+      minutesPerMatch: 45,
+      courts: ["Quadra 1"],
+    });
+    expect(res.scheduled).toBe(9);
+    const ms = eng.getStore().matches.filter((m) => m.groupId === g.id);
+    expect(ms.find((m) => m.id === first.id)!.scheduledAt).toBeUndefined();
+    expect(ms.find((m) => m.id === first.id)!.status).toBe("played");
+    const others = ms.filter((m) => m.id !== first.id);
+    expect(others.every((m) => m.status === "scheduled" && m.court === "Quadra 1")).toBe(true);
+    expect(new Set(others.map((m) => m.scheduledAt)).size).toBe(9);
+  });
+
+  it("recusa horário inválido e duração inválida", () => {
+    const { eng, cat } = build({ numGroups: 1, advancersPerGroup: 0, pairs: 4 });
+    const g = eng.getStore().groups.find((x) => x.categoryId === cat.id)!;
+    expect(() => eng.scheduleGroup(g.id, { startAt: "", minutesPerMatch: 40 })).toThrow();
+    expect(() =>
+      eng.scheduleGroup(g.id, { startAt: "2026-11-07T12:00:00.000Z", minutesPerMatch: 0 }),
+    ).toThrow();
+  });
+});
+
+describe("todos os jogos do grupo no mesmo horário", () => {
+  it("marca todos os jogos pendentes com o mesmo horário e preserva os disputados", () => {
+    const { eng, cat } = build({ numGroups: 1, advancersPerGroup: 0, pairs: 4 });
+    const g = eng.getStore().groups.find((x) => x.categoryId === cat.id)!;
+    const first = eng.getStore().matches.find((m) => m.groupId === g.id)!;
+    eng.recordScore(first.id, [{ gamesA: 6, gamesB: 1 }]);
+    const res = eng.scheduleGroup(g.id, {
+      startAt: "2026-11-07T12:00:00.000Z",
+      minutesPerMatch: 1,
+      sameTime: true,
+      courts: ["Quadras 1 e 2"],
+    });
+    expect(res.scheduled).toBe(5);
+    const others = eng.getStore().matches.filter((m) => m.groupId === g.id && m.id !== first.id);
+    expect(new Set(others.map((m) => m.scheduledAt))).toEqual(
+      new Set(["2026-11-07T12:00:00.000Z"]),
+    );
+    expect(others.every((m) => m.status === "scheduled" && m.court === "Quadras 1 e 2")).toBe(true);
+    expect(eng.getStore().matches.find((m) => m.id === first.id)!.scheduledAt).toBeUndefined();
+  });
+});

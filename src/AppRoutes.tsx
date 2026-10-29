@@ -3,6 +3,7 @@ import { LetzmrShell } from "./letzmr/ui/LetzmrShell";
 import { LetzmrHomePage } from "./letzmr/ui/LetzmrHomePage";
 import { LetzmrTournamentPage } from "./letzmr/ui/LetzmrTournamentPage";
 import { LetzmrCategoryPage } from "./letzmr/ui/LetzmrCategoryPage";
+import { LetzmrPublicTournamentPage } from "./letzmr/ui/LetzmrPublicTournamentPage";
 import { LetzmrPublicPage } from "./letzmr/ui/LetzmrPublicPage";
 import LoginPage from "./pages/LoginPage";
 
@@ -14,6 +15,7 @@ export function AppRoutes() {
         <Route index element={<LetzmrHomePage />} />
         <Route path="t/:tournamentId" element={<LetzmrTournamentPage />} />
         <Route path="t/:tournamentId/c/:categoryId" element={<LetzmrCategoryPage />} />
+        <Route path="public/:tournamentId" element={<LetzmrPublicTournamentPage />} />
         <Route path="public/:tournamentId/:categoryId" element={<LetzmrPublicPage />} />
       </Route>
       {/* Rotas legadas */}

@@ -19,4 +19,6 @@ export interface LetzmrPersistence {
   publishCategory(store: LetzmrStore, categoryId: string): Promise<PersistResult>;
   unpublishCategory(categoryId: string): Promise<PersistResult>;
   loadPublicCategory(categoryId: string): Promise<PublicCategorySnapshot | null>;
+  /** Todas as categorias publicadas de um torneio (leitura aberta, sem login). */
+  loadPublicTournament(tournamentId: string): Promise<PublicCategorySnapshot[]>;
 }

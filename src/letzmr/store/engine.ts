@@ -26,7 +26,7 @@ import {
   orderChanged,
 } from "../domain/score";
 import { isGroupComplete } from "../domain/publicDraw";
-import { findCrossCategoryConflicts } from "../domain/schedule";
+import { findCrossCategoryConflicts, planGroupSchedule } from "../domain/schedule";
 import { computeGroupStandings, rankGroup } from "../domain/standings";
 import type {
   Athlete,
@@ -673,6 +673,71 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         focusMatchId: matchId,
       });
       return { conflicts };
+    },
+
+    /**
+     * Programa de uma vez todos os jogos ainda não disputados de um grupo, em horários
+     * consecutivos a partir de `startAt`. Jogos já disputados não são alterados.
+     */
+    scheduleGroup: (
+      groupId: string,
+      opts: {
+        startAt: string;
+        minutesPerMatch: number;
+        courts?: string[];
+        /** Todos os jogos do grupo no mesmo horário (a ordem é definida na hora). */
+        sameTime?: boolean;
+      },
+    ): { scheduled: number; conflicts: ScheduleConflict[] } => {
+      const group = store.groups.find((g) => g.id === groupId);
+      if (!group) throw new Error("Grupo não encontrado");
+      const start = new Date(opts.startAt);
+      if (Number.isNaN(start.getTime())) throw new Error("Informe a data e a hora do 1º jogo.");
+      if (!opts.sameTime && (!Number.isFinite(opts.minutesPerMatch) || opts.minutesPerMatch < 1)) {
+        throw new Error("Informe a duração de cada jogo em minutos.");
+      }
+      const open = store.matches.filter(
+        (m) =>
+          m.groupId === groupId &&
+          m.phase === "GROUP" &&
+          m.status !== "played" &&
+          m.status !== "wo" &&
+          m.status !== "bye",
+      );
+      if (open.length === 0) throw new Error("Não há jogos a programar neste grupo.");
+      const courtLabel = (opts.courts ?? []).map((c) => c.trim()).filter(Boolean).join(" / ");
+      const plan = opts.sameTime
+        ? open.map((m) => ({
+            matchId: m.id,
+            scheduledAt: start.toISOString(),
+            court: courtLabel || undefined,
+          }))
+        : planGroupSchedule({
+            matches: open,
+            startAt: start,
+            minutesPerMatch: opts.minutesPerMatch,
+            courts: opts.courts,
+          });
+      const byId = new Map(plan.map((p) => [p.matchId, p]));
+      store = {
+        ...store,
+        matches: store.matches.map((m) => {
+          const p = byId.get(m.id);
+          if (!p) return m;
+          return {
+            ...m,
+            scheduledAt: p.scheduledAt,
+            court: p.court,
+            status: m.status === "pending" ? "scheduled" : m.status,
+          };
+        }),
+      };
+      const conflicts = findCrossCategoryConflicts({
+        matches: store.matches,
+        registrations: store.registrations,
+        athletes: store.athletes,
+      }).filter((c) => byId.has(c.matchAId) || byId.has(c.matchBId));
+      return { scheduled: plan.length, conflicts };
     },
 
     setPublished: (categoryId: string, published: boolean) => {

@@ -14,6 +14,50 @@ import { BRACKET_SEEDING_LABEL, availableBracketSeedings } from "../domain/brack
 import type { BracketSeeding, CategoryFormat } from "../domain/types";
 import { useLetzmr } from "./useLetzmr";
 
+function PublicLinkBox({
+  tournamentId,
+  publishedCount,
+}: {
+  tournamentId: string;
+  publishedCount: number;
+}) {
+  const [copied, setCopied] = useState(false);
+  const url = `${window.location.origin}/public/${tournamentId}`;
+  return (
+    <section
+      className="space-y-2 rounded-lg border border-[hsl(var(--border))] p-4"
+      data-testid="public-link"
+    >
+      <h2 className="text-lg font-semibold">Página pública do torneio</h2>
+      <p className="text-xs text-[hsl(var(--muted-foreground))]">
+        Qualquer pessoa com o link vê as categorias publicadas e os horários, sem login.{" "}
+        {publishedCount === 0
+          ? "Nenhuma categoria está publicada ainda."
+          : `${publishedCount} categoria(s) publicada(s).`}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input readOnly value={url} className="max-w-md" onFocus={(e) => e.target.select()} />
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            void navigator.clipboard?.writeText(url).then(() => {
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 2000);
+            });
+          }}
+        >
+          {copied ? "Copiado!" : "Copiar link"}
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link to={`/public/${tournamentId}`}>Abrir</Link>
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 export function LetzmrTournamentPage() {
   const { tournamentId } = useParams();
   const { store, run, publishCategory } = useLetzmr();
@@ -55,6 +99,8 @@ export function LetzmrTournamentPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-bold">{t.name}</h1>
       </div>
+
+      <PublicLinkBox tournamentId={t.id} publishedCount={cats.filter((c) => c.published).length} />
 
       <section className="space-y-3 rounded-lg border border-[hsl(var(--border))] p-4">
         <h2 className="text-lg font-semibold">Nova categoria</h2>

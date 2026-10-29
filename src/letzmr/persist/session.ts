@@ -36,6 +36,9 @@ function unavailablePersistence(): LetzmrPersistence {
     async loadPublicCategory() {
       return null;
     },
+    async loadPublicTournament() {
+      return [];
+    },
   };
 }
 

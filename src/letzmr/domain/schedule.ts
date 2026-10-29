@@ -60,3 +60,53 @@ export function findCrossCategoryConflicts(args: {
 
   return conflicts;
 }
+
+export type PlannedSlot = { matchId: string; scheduledAt: string; court?: string };
+
+/**
+ * Distribui os jogos em horários consecutivos. Com N quadras, até N jogos por horário;
+ * nunca coloca a mesma dupla em dois jogos no mesmo horário e prefere quem descansou mais.
+ */
+export function planGroupSchedule(args: {
+  matches: Match[];
+  startAt: Date;
+  minutesPerMatch: number;
+  courts?: string[];
+}): PlannedSlot[] {
+  const { matches, startAt, minutesPerMatch } = args;
+  const courts = (args.courts ?? []).map((c) => c.trim()).filter(Boolean);
+  const capacity = Math.max(1, courts.length);
+  const remaining = [...matches].sort((a, b) => a.position - b.position);
+  const lastSlot = new Map<string, number>();
+  const plan: PlannedSlot[] = [];
+
+  for (let slot = 0; remaining.length > 0; slot += 1) {
+    const busy = new Set<string>();
+    const at = new Date(startAt.getTime() + slot * minutesPerMatch * 60_000).toISOString();
+    for (let k = 0; k < capacity; k += 1) {
+      let best = -1;
+      let bestRest = -1;
+      remaining.forEach((m, idx) => {
+        const sides = [m.sideAId, m.sideBId].filter((x): x is string => Boolean(x));
+        if (sides.some((s) => busy.has(s))) return;
+        const rest = Math.min(
+          ...sides.map((s) => (lastSlot.has(s) ? slot - (lastSlot.get(s) as number) : 1e9)),
+        );
+        if (rest > bestRest) {
+          best = idx;
+          bestRest = rest;
+        }
+      });
+      if (best < 0) break;
+      const [m] = remaining.splice(best, 1);
+      [m.sideAId, m.sideBId].forEach((s) => {
+        if (s) {
+          busy.add(s);
+          lastSlot.set(s, slot);
+        }
+      });
+      plan.push({ matchId: m.id, scheduledAt: at, court: courts[k] });
+    }
+  }
+  return plan;
+}

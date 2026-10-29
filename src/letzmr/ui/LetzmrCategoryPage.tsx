@@ -12,8 +12,18 @@ import type {
   Match,
   ScheduleConflict,
 } from "../domain/types";
+import { GroupScheduleForm } from "./GroupScheduleForm";
 import { CategorySetupPanel } from "./CategorySetupPanel";
 import { useLetzmr } from "./useLetzmr";
+
+/** ISO (UTC) -> valor local para <input type="datetime-local"> (sem deslocar o fuso). */
+function toLocalInput(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 export function LetzmrCategoryPage() {
   const { tournamentId, categoryId } = useParams();
@@ -85,8 +95,18 @@ export function LetzmrCategoryPage() {
   const hasKnockout = cat.format === "KO" || cat.advancersPerGroup > 0;
 
   const renderMatchRow = (m: Match) => {
-    const draft = scoreDraft[m.id] ?? { a: "6", b: "3" };
-    const when = scheduleDraft[m.id] ?? m.scheduledAt?.slice(0, 16) ?? "";
+    const draft = scoreDraft[m.id] ?? { a: "0", b: "0" };
+    const gamesA = Number(draft.a);
+    const gamesB = Number(draft.b);
+    const scoreValid =
+      draft.a.trim() !== "" &&
+      draft.b.trim() !== "" &&
+      Number.isInteger(gamesA) &&
+      Number.isInteger(gamesB) &&
+      gamesA >= 0 &&
+      gamesB >= 0 &&
+      gamesA !== gamesB;
+    const when = scheduleDraft[m.id] ?? toLocalInput(m.scheduledAt) ?? "";
     const played =
       m.status === "played" || m.status === "wo" || m.status === "bye";
     return (
@@ -126,6 +146,8 @@ export function LetzmrCategoryPage() {
                     }))
                   }
                   aria-label="Games A"
+                  inputMode="numeric"
+                  onFocus={(e) => e.target.select()}
                 />
                 <span>–</span>
                 <Input
@@ -138,15 +160,19 @@ export function LetzmrCategoryPage() {
                     }))
                   }
                   aria-label="Games B"
+                  inputMode="numeric"
+                  onFocus={(e) => e.target.select()}
                 />
               </div>
               <Button
                 size="sm"
                 type="button"
+                disabled={!scoreValid}
+                title={scoreValid ? undefined : "Informe os games dos dois lados (sem empate)."}
                 onClick={() => {
                   void run((e) =>
                     e.recordScore(m.id, [
-                      { gamesA: Number(draft.a), gamesB: Number(draft.b) },
+                      { gamesA, gamesB },
                     ]),
                   )
                     .then(() => {
@@ -761,87 +787,120 @@ export function LetzmrCategoryPage() {
       {standings.length > 0 && (
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">Classificação</h2>
-          {standings.map(({ group, ranked, residualPending }) => (
-            <div key={group.id} className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-medium">{group.label}</h3>
-                {residualPending.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-[hsl(var(--destructive))]">
-                      Empate residual — posição por sorteio
-                    </span>
-                    <Button
-                      size="sm"
-                      type="button"
-                      onClick={() => {
-                        void run((e) => e.applyResidualDraw(group.id))
-                          .then(() =>
-                            setMsg(
-                              "Sorteio aplicado e persistido. Classifique após o sorteio.",
-                            ),
-                          )
-                          .catch((err) =>
-                            setWarn(
-                              err instanceof Error ? err.message : "Erro",
-                            ),
-                          );
-                      }}
-                    >
-                      Classificar após o sorteio
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
-                      <th className="py-1 pr-2">#</th>
-                      <th className="py-1 pr-2">Inscrito</th>
-                      <th className="py-1 pr-2">V-D</th>
-                      <th className="py-1 pr-2">Sets</th>
-                      <th className="py-1 pr-2">Games</th>
-                      <th className="py-1 pr-2">Origem</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ranked.map((r) => (
-                      <tr
-                        key={r.registrationId}
-                        className="border-b border-[hsl(var(--border))]/60"
+          {standings.map(({ group, ranked, residualPending }) => {
+            // Sem nenhum resultado lançado todos estão empatados em 0: não é empate de verdade.
+            const hasResults = groupMatches.some(
+              (m) =>
+                m.groupId === group.id &&
+                (m.status === "played" || m.status === "wo"),
+            );
+            return (
+              <div key={group.id} className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-medium">{group.label}</h3>
+                  {hasResults && residualPending.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-[hsl(var(--destructive))]">
+                        Empate residual — posição por sorteio
+                      </span>
+                      <Button
+                        size="sm"
+                        type="button"
+                        onClick={() => {
+                          void run((e) => e.applyResidualDraw(group.id))
+                            .then(() =>
+                              setMsg(
+                                "Sorteio aplicado e persistido. Classifique após o sorteio.",
+                              ),
+                            )
+                            .catch((err) =>
+                              setWarn(
+                                err instanceof Error ? err.message : "Erro",
+                              ),
+                            );
+                        }}
                       >
-                        <td className="py-1 pr-2">{r.rank}</td>
-                        <td className="py-1 pr-2">
-                          {nameOf(r.registrationId)}
-                        </td>
-                        <td className="py-1 pr-2">
-                          {r.wins}-{r.losses}
-                        </td>
-                        <td className="py-1 pr-2">
-                          {r.setsFor}/{r.setsAgainst} (
-                          {r.setDiff >= 0 ? "+" : ""}
-                          {r.setDiff})
-                        </td>
-                        <td className="py-1 pr-2">
-                          {r.gamesFor}/{r.gamesAgainst} (
-                          {r.gameDiff >= 0 ? "+" : ""}
-                          {r.gameDiff})
-                        </td>
-                        <td className="py-1 pr-2 text-xs">{r.rankSource}</td>
+                        Classificar após o sorteio
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
+                        <th className="py-1 pr-2">#</th>
+                        <th className="py-1 pr-2">Inscrito</th>
+                        <th className="py-1 pr-2">V-D</th>
+                        <th className="py-1 pr-2">Sets</th>
+                        <th className="py-1 pr-2">Games</th>
+                        <th className="py-1 pr-2">Origem</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {ranked.map((r) => (
+                        <tr
+                          key={r.registrationId}
+                          className="border-b border-[hsl(var(--border))]/60"
+                        >
+                          <td className="py-1 pr-2">{r.rank}</td>
+                          <td className="py-1 pr-2">
+                            {nameOf(r.registrationId)}
+                          </td>
+                          <td className="py-1 pr-2">
+                            {r.wins}-{r.losses}
+                          </td>
+                          <td className="py-1 pr-2">
+                            {r.setsFor}/{r.setsAgainst} (
+                            {r.setDiff >= 0 ? "+" : ""}
+                            {r.setDiff})
+                          </td>
+                          <td className="py-1 pr-2">
+                            {r.gamesFor}/{r.gamesAgainst} (
+                            {r.gameDiff >= 0 ? "+" : ""}
+                            {r.gameDiff})
+                          </td>
+                          <td className="py-1 pr-2 text-xs">{r.rankSource}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </section>
       )}
 
       {groupMatches.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Jogos de grupo</h2>
-          <div className="space-y-2">{groupMatches.map(renderMatchRow)}</div>
+          <div className="space-y-6">
+            {[...groups]
+              .sort((a, b) => a.index - b.index)
+              .map((g) => {
+                const rows = groupMatches
+                  .filter((m) => m.groupId === g.id)
+                  .sort((a, b) => a.position - b.position);
+                if (rows.length === 0) return null;
+                return (
+                  <div key={g.id} className="space-y-2">
+                    <h3 className="font-medium">{g.label}</h3>
+                    <GroupScheduleForm
+                      groupId={g.id}
+                      groupLabel={g.label}
+                      onDone={(message, c) => {
+                        setMsg(message);
+                        setWarn("");
+                        setConflicts(c);
+                      }}
+                      onError={(message) => setWarn(message)}
+                    />
+                    {rows.map(renderMatchRow)}
+                  </div>
+                );
+              })}
+          </div>
         </section>
       )}
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/data/client";
 import type { LetzmrStore } from "../domain/types";
 import { isLetzmrLiveConfigured } from "../persist/config";
@@ -8,7 +8,7 @@ import { PublicCategoryView } from "./PublicCategoryView";
 
 /** Consulta pública somente leitura: abre sem login e só mostra categorias publicadas. */
 export function LetzmrPublicPage() {
-  const { categoryId } = useParams();
+  const { tournamentId, categoryId } = useParams();
   const [remote, setRemote] = useState<LetzmrStore | null>(null);
   const [meta, setMeta] = useState<{ tournamentName: string; categoryName: string } | null>(
     null,
@@ -18,9 +18,11 @@ export function LetzmrPublicPage() {
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      setLoading(true);
-      setError("");
+    async function load(silent: boolean) {
+      if (!silent) {
+        setLoading(true);
+        setError("");
+      }
       try {
         if (!supabase || !isLetzmrLiveConfigured()) {
           throw new Error("Consulta indisponível no momento.");
@@ -38,14 +40,19 @@ export function LetzmrPublicPage() {
           setMeta(null);
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar");
+        if (!cancelled && !silent) {
+          setError(e instanceof Error ? e.message : "Erro ao carregar");
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && !silent) setLoading(false);
       }
     }
-    void load();
+    void load(false);
+    // Atualiza sozinho para quem deixa a página aberta durante o torneio.
+    const timer = window.setInterval(() => void load(true), 30_000);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
   }, [categoryId]);
 
@@ -65,11 +72,19 @@ export function LetzmrPublicPage() {
   }
 
   return (
-    <PublicCategoryView
-      store={remote}
-      categoryId={categoryId!}
-      tournamentName={meta.tournamentName}
-      categoryName={meta.categoryName}
-    />
+    <div className="space-y-4">
+      <Link
+        to={`/public/${tournamentId}`}
+        className="text-sm text-[hsl(var(--muted-foreground))] hover:underline"
+      >
+        ← Todas as categorias do torneio
+      </Link>
+      <PublicCategoryView
+        store={remote}
+        categoryId={categoryId!}
+        tournamentName={meta.tournamentName}
+        categoryName={meta.categoryName}
+      />
+    </div>
   );
 }

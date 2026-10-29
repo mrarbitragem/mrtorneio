@@ -64,6 +64,17 @@ function buildCategorySnapshot(store: LetzmrStore, categoryId: string): LetzmrSt
   };
 }
 
+function toPublicSnapshot(data: Record<string, unknown>): PublicCategorySnapshot {
+  return {
+    categoryId: data.category_id as string,
+    tournamentId: data.tournament_id as string,
+    tournamentName: data.tournament_name as string,
+    categoryName: data.category_name as string,
+    snapshot: data.snapshot as LetzmrStore,
+    publishedAt: data.published_at as string,
+  };
+}
+
 export function createSupabasePersistence(args: {
   client: SupabaseClient;
   getUserId: () => string | null;
@@ -216,14 +227,17 @@ export function createSupabasePersistence(args: {
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) return null;
-      return {
-        categoryId: data.category_id as string,
-        tournamentId: data.tournament_id as string,
-        tournamentName: data.tournament_name as string,
-        categoryName: data.category_name as string,
-        snapshot: data.snapshot as LetzmrStore,
-        publishedAt: data.published_at as string,
-      };
+      return toPublicSnapshot(data);
+    },
+
+    async loadPublicTournament(tournamentId): Promise<PublicCategorySnapshot[]> {
+      const { data, error } = await client
+        .from("letzmr_public_categories")
+        .select("*")
+        .eq("tournament_id", tournamentId)
+        .order("category_name", { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data ?? []).map(toPublicSnapshot);
     },
   };
 }
