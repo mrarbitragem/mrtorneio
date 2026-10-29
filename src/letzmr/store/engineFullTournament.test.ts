@@ -387,3 +387,37 @@ describe("todos os jogos do grupo no mesmo horário", () => {
     expect(eng.getStore().matches.find((m) => m.id === first.id)!.scheduledAt).toBeUndefined();
   });
 });
+
+describe("cancelar resultado", () => {
+  it("antes de montar a chave é só placar, sem falso aviso de divergência", () => {
+    const { eng, cat } = build({ numGroups: 4, advancersPerGroup: 2, pairs: 14 });
+    const m = eng.getStore().matches.find((x) => x.categoryId === cat.id && x.phase === "GROUP")!;
+    eng.recordScore(m.id, [{ gamesA: 6, gamesB: 2 }]);
+    const impact = eng.previewCancelImpact(m.id);
+    expect(impact.kind).toBe("score_only");
+    expect(impact.divergenceWarning).toBe(false);
+    eng.cancelScore(m.id, { correctionKind: "score_only", confirmClear: false });
+    const after = eng.getStore().matches.find((x) => x.id === m.id)!;
+    expect(after.score).toBeUndefined();
+    expect(after.status).toBe("pending");
+    expect(after.winnerRegistrationId).toBeUndefined();
+  });
+
+  it("jogo da eliminatória: cancelar remove o vencedor da fase seguinte", () => {
+    const { eng, cat } = build({ numGroups: 2, advancersPerGroup: 2, pairs: 8, seeding: "BY_GROUP" });
+    playAllReady(eng, cat.id, "GROUP");
+    for (const g of eng.getStore().groups) {
+      if (eng.getGroupStandings(g.id).residualPending.length) eng.applyResidualDraw(g.id);
+    }
+    eng.materializeBracket(cat.id);
+    const ko = eng.getStore().matches.find(
+      (x) => x.categoryId === cat.id && x.phase === "KO" && x.round === 1 && x.sideAId && x.sideBId,
+    )!;
+    eng.recordScore(ko.id, [{ gamesA: 6, gamesB: 1 }]);
+    const next = () => eng.getStore().matches.find((x) => x.id === ko.feedsToMatchId)!;
+    expect([next().sideAId, next().sideBId]).toContain(ko.sideAId);
+    eng.cancelScore(ko.id, { correctionKind: "score_only", confirmClear: false });
+    expect(eng.getStore().matches.find((x) => x.id === ko.id)!.score).toBeUndefined();
+    expect([next().sideAId, next().sideBId]).not.toContain(ko.sideAId);
+  });
+});

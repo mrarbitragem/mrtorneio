@@ -221,10 +221,15 @@ export function LetzmrCategoryPage() {
               size="sm"
               variant="destructive"
               type="button"
+              data-testid="cancel-result"
               onClick={() => {
-                const imp = eng.previewCancelImpact(m.id);
-                setImpact(imp);
-                setPendingCancelId(m.id);
+                try {
+                  setImpact(eng.previewCancelImpact(m.id));
+                  setPendingCancelId(m.id);
+                  setWarn("");
+                } catch (err) {
+                  setWarn(err instanceof Error ? err.message : "Erro");
+                }
               }}
             >
               Cancelar resultado
@@ -264,6 +269,96 @@ export function LetzmrCategoryPage() {
             </Button>
           </div>
         </div>
+        {pendingCancelId === m.id && impact && (
+          <div
+            className={
+              "space-y-3 rounded-md border p-3 sm:col-span-2 " +
+              (impact.divergenceWarning
+                ? "border-[hsl(var(--destructive))] bg-red-50"
+                : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]")
+            }
+            data-testid="cancel-panel"
+          >
+            <p className="font-medium">
+              {impact.divergenceWarning
+                ? "Atenção: isso pode mudar a classificação"
+                : "Cancelar este resultado?"}
+            </p>
+            <p className="text-sm">{impact.message}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                type="button"
+                data-testid="cancel-score-only"
+                onClick={() => {
+                  void run((e) =>
+                    e.cancelScore(m.id, {
+                      correctionKind: "score_only",
+                      confirmClear: false,
+                    }),
+                  )
+                    .then(() => {
+                      setImpact(null);
+                      setPendingCancelId(null);
+                      setWarn("");
+                      setMsg(
+                        m.phase === "KO"
+                          ? "Resultado cancelado."
+                          : "Resultado cancelado (só o placar; a chave não foi alterada).",
+                      );
+                    })
+                    .catch((err) =>
+                      setWarn(err instanceof Error ? err.message : "Erro"),
+                    );
+                }}
+              >
+                {impact.divergenceWarning
+                  ? "Cancelar só o placar (manter a chave)"
+                  : "Sim, cancelar o resultado"}
+              </Button>
+              {impact.divergenceWarning && m.phase === "GROUP" && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  type="button"
+                  data-testid="cancel-clear-bracket"
+                  onClick={() => {
+                    void run((e) =>
+                      e.cancelScore(m.id, {
+                        correctionKind: "advancement_mismatch",
+                        confirmClear: true,
+                      }),
+                    )
+                      .then(() => {
+                        setImpact(null);
+                        setPendingCancelId(null);
+                        setWarn("");
+                        setMsg(
+                          "Resultado cancelado e chave limpa: monte a eliminatória de novo quando os grupos terminarem.",
+                        );
+                      })
+                      .catch((err) =>
+                        setWarn(err instanceof Error ? err.message : "Erro"),
+                      );
+                  }}
+                >
+                  Cancelar e limpar a chave (classificação errada)
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  setImpact(null);
+                  setPendingCancelId(null);
+                }}
+              >
+                Voltar
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -339,7 +434,10 @@ export function LetzmrCategoryPage() {
       )}
 
       {(msg || warn) && (
-        <Alert variant={warn ? "destructive" : "default"}>
+        <Alert
+          variant={warn ? "destructive" : "default"}
+          className="sticky top-2 z-20 bg-white shadow-md"
+        >
           <AlertTitle>{warn ? "Atenção" : "OK"}</AlertTitle>
           <AlertDescription>{warn || msg}</AlertDescription>
         </Alert>
@@ -357,79 +455,6 @@ export function LetzmrCategoryPage() {
             <p className="mt-1 text-xs">
               Agendamento permitido (não bloqueante).
             </p>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {impact && pendingCancelId && (
-        <Alert variant={impact.divergenceWarning ? "destructive" : "default"}>
-          <AlertTitle>
-            {impact.divergenceWarning
-              ? "Divergência pós-correção"
-              : "Confirmar cancelamento"}
-          </AlertTitle>
-          <AlertDescription className="space-y-3">
-            <p>{impact.message}</p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                type="button"
-                onClick={() => {
-                  void run((e) =>
-                    e.cancelScore(pendingCancelId, {
-                      correctionKind: "score_only",
-                      confirmClear: false,
-                    }),
-                  )
-                    .then(() => {
-                      setImpact(null);
-                      setPendingCancelId(null);
-                      setMsg(
-                        "Resultado cancelado (só placar — avanços mantidos).",
-                      );
-                    })
-                    .catch((err) =>
-                      setWarn(err instanceof Error ? err.message : "Erro"),
-                    );
-                }}
-              >
-                Só placar (não limpar avanço)
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                type="button"
-                onClick={() => {
-                  void run((e) =>
-                    e.cancelScore(pendingCancelId, {
-                      correctionKind: "advancement_mismatch",
-                      confirmClear: true,
-                    }),
-                  )
-                    .then(() => {
-                      setImpact(null);
-                      setPendingCancelId(null);
-                      setMsg("Resultado cancelado e avanços limpos.");
-                    })
-                    .catch((err) =>
-                      setWarn(err instanceof Error ? err.message : "Erro"),
-                    );
-                }}
-              >
-                Atleta/classificação errada (limpar avanço)
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                type="button"
-                onClick={() => {
-                  setImpact(null);
-                  setPendingCancelId(null);
-                }}
-              >
-                Fechar
-              </Button>
-            </div>
           </AlertDescription>
         </Alert>
       )}

@@ -359,7 +359,8 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         return {
           kind: "score_only",
           divergenceWarning: false,
-          message: "Cancelamento de placar de eliminatória.",
+          message:
+            "O placar será apagado e o vencedor sai das fases seguintes (jogos seguintes que dependem dele também voltam a 'a definir').",
           affectedKoSlots: [],
           wouldClearAdvancement: true,
         };

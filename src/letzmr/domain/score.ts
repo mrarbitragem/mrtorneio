@@ -131,6 +131,18 @@ export function analyzeCorrectionImpact(args: {
   const sameSet =
     expected.size === materialized.size && [...expected].every((id) => materialized.has(id));
 
+  // Eliminatória ainda não montada: não há nada a divergir, é só o placar.
+  if (materialized.size === 0) {
+    return {
+      kind: "score_only",
+      divergenceWarning: false,
+      message:
+        "A eliminatória ainda não foi montada, então só o placar deste jogo será apagado.",
+      affectedKoSlots: [],
+      wouldClearAdvancement: false,
+    };
+  }
+
   const mismatch = !sameSet || args.standingsChangedOrder || Boolean(args.crossOrderChanged);
   const koWithScores = args.koMatches.filter(
     (m) => m.phase === "KO" && (m.status === "played" || m.status === "wo"),
