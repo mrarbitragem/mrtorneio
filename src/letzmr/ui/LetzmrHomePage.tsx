@@ -15,6 +15,7 @@ export function LetzmrHomePage() {
     session,
     user,
     reload,
+    deleteTournament,
   } = useLetzmr();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
@@ -168,9 +169,35 @@ export function LetzmrHomePage() {
                       {t.organizerId ? ` · org ${t.organizerId.slice(0, 8)}` : ""}
                     </p>
                   </div>
-                  <Button asChild size="sm" variant="secondary">
-                    <Link to={`/t/${t.id}`}>Abrir</Link>
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button asChild size="sm" variant="secondary">
+                      <Link to={`/t/${t.id}`}>Abrir</Link>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      type="button"
+                      disabled={busy}
+                      data-testid="delete-tournament"
+                      onClick={() => {
+                        const published = cats.filter((c) => c.published).length;
+                        const ok = window.confirm(
+                          `Excluir o torneio "${t.name}"?\n\n` +
+                            `Isto apaga ${cats.length} categoria(s), inscrições, grupos, jogos e placares` +
+                            (published ? `, e tira do ar ${published} página(s) pública(s)` : "") +
+                            `. Não dá para desfazer.`,
+                        );
+                        if (!ok) return;
+                        setBusy(true);
+                        setError("");
+                        void deleteTournament(t.id)
+                          .catch((e) => setError(e instanceof Error ? e.message : "Erro"))
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      Excluir
+                    </Button>
+                  </div>
                 </li>
               );
             })}

@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { parseRegistrationList } from "../domain/registrationList";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { BRACKET_SEEDING_LABEL } from "../domain/bracket";
 import type { CorrectionImpact, Match, ScheduleConflict } from "../domain/types";
@@ -23,6 +25,7 @@ export function LetzmrCategoryPage() {
 
   const [p1, setP1] = useState("");
   const [p2, setP2] = useState("");
+  const [listText, setListText] = useState("");
   const [msg, setMsg] = useState("");
   const [warn, setWarn] = useState("");
   const [impact, setImpact] = useState<CorrectionImpact | null>(null);
@@ -30,6 +33,11 @@ export function LetzmrCategoryPage() {
   const [conflicts, setConflicts] = useState<ScheduleConflict[]>([]);
   const [scoreDraft, setScoreDraft] = useState<Record<string, { a: string; b: string }>>({});
   const [scheduleDraft, setScheduleDraft] = useState<Record<string, string>>({});
+
+  const parsedList = useMemo(
+    () => parseRegistrationList(listText, cat?.entryType ?? "doubles"),
+    [listText, cat?.entryType],
+  );
 
   const standings = useMemo(() => {
     return groups.map((g) => ({
@@ -59,6 +67,8 @@ export function LetzmrCategoryPage() {
   }
 
   const nameOf = (id?: string) => eng.regName(id);
+  const singleGroup = cat.format === "GROUP_KO" && cat.numGroups === 1;
+  const hasKnockout = cat.format === "KO" || cat.advancersPerGroup > 0;
 
   const renderMatchRow = (m: Match) => {
     const draft = scoreDraft[m.id] ?? { a: "6", b: "3" };
@@ -210,10 +220,14 @@ export function LetzmrCategoryPage() {
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
           {cat.format === "GROUP_KO" ? "G+C" : "Eliminatória"} · {cat.entryType} · {cat.status}
           {cat.format === "GROUP_KO"
-            ? ` · ${cat.numGroups} grupos / ${cat.advancersPerGroup} class.`
+            ? singleGroup
+              ? cat.advancersPerGroup === 0
+                ? " · grupo único (termina no grupo)"
+                : " · grupo único + final (1º × 2º)"
+            : ` · ${cat.numGroups} grupos / ${cat.advancersPerGroup} class.`
             : ""}
         </p>
-        {cat.format === "GROUP_KO" && (
+        {cat.format === "GROUP_KO" && !singleGroup && (
           <p className="text-xs text-[hsl(var(--muted-foreground))]" data-testid="bracket-seeding-label">
             Chave: {BRACKET_SEEDING_LABEL[cat.bracketSeeding ?? "BY_GROUP"]}
           </p>
@@ -337,13 +351,106 @@ export function LetzmrCategoryPage() {
             Inscrever
           </Button>
         </div>
+
+        <div className="space-y-2 border-t border-[hsl(var(--border))] pt-3">
+          <Label htmlFor="reg-list">Inscrever em lista</Label>
+          <Textarea
+            id="reg-list"
+            data-testid="registration-list"
+            rows={6}
+            value={listText}
+            onChange={(e) => setListText(e.target.value)}
+            placeholder={
+              cat.entryType === "doubles"
+                ? "1. Dilma / Sueli\n2. Gisele / Bia\n3. Renata / Patricia"
+                : "1. Dilma\n2. Gisele\n3. Renata"
+            }
+          />
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            Uma {cat.entryType === "doubles" ? "dupla" : "inscrição"} por linha.{" "}
+            {cat.entryType === "doubles"
+              ? "Separe os dois atletas com / (obrigatório: cada dupla tem exatamente 2 nomes)."
+              : "Um nome por linha."}{" "}
+            A numeração no começo da linha é opcional.
+          </p>
+          {listText.trim() && (
+            <div className="space-y-1 text-sm" data-testid="registration-list-preview">
+              {parsedList.errors.length === 0 ? (
+                <p>
+                  {parsedList.entries.length}{" "}
+                  {parsedList.entries.length === 1 ? "inscrição pronta" : "inscrições prontas"}.
+                </p>
+              ) : (
+                <>
+                  <p className="text-[hsl(var(--destructive))]">
+                    Corrija {parsedList.errors.length === 1 ? "a linha" : "as linhas"} abaixo para
+                    inscrever (nada é inscrito enquanto houver erro):
+                  </p>
+                  <ul className="list-disc pl-5 text-[hsl(var(--destructive))]">
+                    {parsedList.errors.map((er) => (
+                      <li key={er.line}>
+                        Linha {er.line} “{er.text}”: {er.message}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {parsedList.repeatedNames.length > 0 && (
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Atenção: nome repetido na lista: {parsedList.repeatedNames.join(", ")}.
+                </p>
+              )}
+            </div>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            data-testid="register-list"
+            disabled={
+              !listText.trim() || parsedList.errors.length > 0 || parsedList.entries.length === 0
+            }
+            onClick={() => {
+              void run((e) => e.registerMany(cat.id, parsedList.entries))
+                .then((created) => {
+                  setListText("");
+                  setMsg(`${created.length} inscrição(ões) feita(s).`);
+                  setWarn("");
+                })
+                .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+            }}
+          >
+            Inscrever lista
+          </Button>
+        </div>
+
         <ul className="text-sm">
           {regs.map((r) => (
-            <li key={r.id}>
-              {r.displayName}
-              {r.groupId
-                ? ` · ${groups.find((g) => g.id === r.groupId)?.label ?? r.groupId}`
-                : ""}
+            <li key={r.id} className="flex items-center gap-2 py-0.5">
+              <span>
+                {r.displayName}
+                {r.groupId
+                  ? ` · ${groups.find((g) => g.id === r.groupId)?.label ?? r.groupId}`
+                  : ""}
+              </span>
+              {groups.length === 0 && matches.length === 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-xs text-[hsl(var(--destructive))]"
+                  data-testid="remove-registration"
+                  onClick={() => {
+                    void run((e) => e.removeRegistration(r.id))
+                      .then(() => {
+                        setMsg("Inscrição removida.");
+                        setWarn("");
+                      })
+                      .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
+                  }}
+                >
+                  Remover
+                </Button>
+              )}
             </li>
           ))}
         </ul>
@@ -363,7 +470,7 @@ export function LetzmrCategoryPage() {
         >
           Gerar jogos
         </Button>
-        {cat.format === "GROUP_KO" && (
+        {cat.format === "GROUP_KO" && hasKnockout && (
           <Button
             type="button"
             variant="secondary"
@@ -376,7 +483,7 @@ export function LetzmrCategoryPage() {
                 .catch((err) => setWarn(err instanceof Error ? err.message : "Erro"));
             }}
           >
-            Materializar eliminatória
+            {singleGroup ? "Montar final" : "Materializar eliminatória"}
           </Button>
         )}
         <Button

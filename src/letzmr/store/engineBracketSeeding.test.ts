@@ -81,7 +81,7 @@ describe("criação de categoria com regra de chave", () => {
 });
 
 describe("chave por ranking cruzado (4 grupos)", () => {
-  it("melhor 1º × 2º do 4º melhor 1º", () => {
+  it("melhor 1º × 2º do 3º melhor 1º (planilha do organizador)", () => {
     const { eng, cat } = setup(4, "CROSS_RANKING");
     // grupo 4 tem o melhor saldo de games, grupo 1 o pior
     playGroups(eng, cat.id, (g) => 5 - g);
@@ -93,8 +93,9 @@ describe("chave por ranking cruzado (4 grupos)", () => {
       .sort((a, b) => a.position - b.position);
     expect(qf).toHaveLength(4);
     // Ranking dos 1ºs: F1=G4, F2=G3, F3=G2, F4=G1 (o 2º de cada grupo segue o seu 1º)
-    // QF1: F1 × S4 = 1º G4 × 2º G1 | QF2: F3 × S2 = 1º G2 × 2º G3
-    // QF3: S1 × F4 = 2º G4 × 1º G1 | QF4: S3 × F2 = 2º G2 × 1º G3
+    // Regra do organizador (planilha "Chave com 4 grupos"):
+    // QF1: F1 × S3 = 1º G4 × 2º G2 | QF2: F4 × S2 = 1º G1 × 2º G3
+    // QF3: S1 × F3 = 2º G4 × 1º G2 | QF4: S4 × F2 = 2º G1 × 1º G3
     const rankOf = (regId?: string) =>
       eng.getStore().registrations.find((r) => r.id === regId) &&
       eng.getGroupStandings(
@@ -102,10 +103,10 @@ describe("chave por ranking cruzado (4 grupos)", () => {
       ).ranked.find((r) => r.registrationId === regId)?.rank;
     const slot = (regId?: string) => `${groupOf(eng, regId)}-${rankOf(regId)}`;
     expect(qf.map((m) => [slot(m.sideAId), slot(m.sideBId)])).toEqual([
-      ["4-1", "1-2"],
-      ["2-1", "3-2"],
-      ["4-2", "1-1"],
-      ["2-2", "3-1"],
+      ["4-1", "2-2"],
+      ["1-1", "3-2"],
+      ["4-2", "2-1"],
+      ["1-2", "3-1"],
     ]);
     expect(qf[0].placeholderA).toBeUndefined();
   });
@@ -258,5 +259,60 @@ describe("regra por grupo segue valendo", () => {
       .sort((a, b) => a.position - b.position);
     expect([groupOf(eng, sf[0].sideAId), groupOf(eng, sf[0].sideBId)]).toEqual([1, 2]);
     expect([groupOf(eng, sf[1].sideAId), groupOf(eng, sf[1].sideBId)]).toEqual([1, 2]);
+  });
+});
+
+describe("grupo único (5 duplas)", () => {
+  function singleGroup(advancersPerGroup: number) {
+    const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+    const t = eng.createTournament("T");
+    const cat = eng.createCategory({
+      tournamentId: t.id,
+      name: "Grupo único",
+      format: "GROUP_KO",
+      entryType: "doubles",
+      numGroups: 1,
+      advancersPerGroup,
+    });
+    for (let i = 0; i < 5; i += 1) {
+      eng.register({ categoryId: cat.id, names: [`A${i}`, `B${i}`] });
+    }
+    eng.generateDraw(cat.id, () => 0);
+    return { eng, cat };
+  }
+
+  it("termina no grupo: 10 jogos, nenhum jogo de eliminatória, sem montar chave", () => {
+    const { eng, cat } = singleGroup(0);
+    const matches = eng.getStore().matches.filter((m) => m.categoryId === cat.id);
+    expect(matches).toHaveLength(10);
+    expect(matches.every((m) => m.phase === "GROUP")).toBe(true);
+    expect(() => eng.materializeBracket(cat.id)).toThrow(/termina no grupo/i);
+  });
+
+  it("com final: o 1º e o 2º do grupo jogam a final", () => {
+    const { eng, cat } = singleGroup(2);
+    playGroups(eng, cat.id, () => 3);
+    eng.materializeBracket(cat.id);
+    const ko = eng.getStore().matches.filter((m) => m.categoryId === cat.id && m.phase === "KO");
+    expect(ko).toHaveLength(1);
+    const group = eng.getStore().groups.find((g) => g.categoryId === cat.id)!;
+    const ranked = eng.getGroupStandings(group.id).ranked;
+    expect(ko[0].sideAId).toBe(ranked.find((r) => r.rank === 1)?.registrationId);
+    expect(ko[0].sideBId).toBe(ranked.find((r) => r.rank === 2)?.registrationId);
+  });
+
+  it("recusa 1 classificado com um grupo só", () => {
+    const eng = createEngine(emptyStore(), { autoLocalPersist: false });
+    const t = eng.createTournament("T");
+    expect(() =>
+      eng.createCategory({
+        tournamentId: t.id,
+        name: "C",
+        format: "GROUP_KO",
+        entryType: "singles",
+        numGroups: 1,
+        advancersPerGroup: 1,
+      }),
+    ).toThrow(/Sem mapping explícito/);
   });
 });

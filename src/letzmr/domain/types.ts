@@ -28,7 +28,7 @@ export interface Tournament {
  * Como os classificados entram na chave:
  * - BY_GROUP: posição fixa por grupo ("1º G1 × 2º G3"), como no LetzPlay.
  * - CROSS_RANKING: os 1ºs colocados são ranqueados entre os grupos
- *   ("1º melhor 1º × 2º do 4º melhor 1º"), como no protótipo Árbitro BT.
+ *   ("1º melhor 1º × 2º do 3º melhor 1º", 4 grupos), como no protótipo Árbitro BT.
  */
 export type BracketSeeding = "BY_GROUP" | "CROSS_RANKING";
 

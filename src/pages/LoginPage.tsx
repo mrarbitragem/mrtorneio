@@ -48,16 +48,36 @@ export default function LoginPage() {
           e.preventDefault();
           setLoading(true);
           setError("");
-          void supabase.auth
-            .signInWithPassword({ email: email.trim(), password })
-            .then(({ error: err }) => {
-              setLoading(false);
-              if (err) {
-                setError(err.message);
-                return;
-              }
-              navigate(safeRedirect(params.get("redirect")));
+          void (async () => {
+            const cleanEmail = email.trim().toLowerCase();
+            const { error: err } = await supabase.auth.signInWithPassword({
+              email: cleanEmail,
+              password,
             });
+            if (err) {
+              setLoading(false);
+              setError(err.message);
+              return;
+            }
+            // Lista de autorizados. O servidor (RLS) é quem bloqueia de verdade;
+            // aqui é só para dar uma mensagem clara. Tabela ainda não criada = não bloqueia.
+            const { data: allowed, error: allowErr } = await supabase
+              .from("letzmr_allowed_users")
+              .select("email")
+              .eq("email", cleanEmail)
+              .eq("active", true)
+              .maybeSingle();
+            const tableMissing =
+              allowErr?.code === "42P01" || allowErr?.code === "PGRST205";
+            if (!tableMissing && (allowErr || !allowed)) {
+              await supabase.auth.signOut();
+              setLoading(false);
+              setError("Este e-mail não está autorizado a usar o MRTorneio. Peça a liberação ao administrador.");
+              return;
+            }
+            setLoading(false);
+            navigate(safeRedirect(params.get("redirect")));
+          })();
         }}
       >
         <div className="space-y-1">

@@ -148,7 +148,14 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       if (cat.entryType === "singles" && args.names.length !== 1) {
         throw new Error("Simples exige 1 atleta");
       }
-      const athletes = args.names.map((n) => api.ensureAthlete(n));
+      if (args.names.some((n) => !n.trim())) {
+        throw new Error(
+          cat.entryType === "doubles"
+            ? "Informe o nome dos 2 atletas da dupla."
+            : "Informe o nome do atleta.",
+        );
+      }
+      const athletes = args.names.map((n) => api.ensureAthlete(n.trim()));
       const r: Registration = {
         id: newId("reg"),
         categoryId: args.categoryId,
@@ -160,6 +167,49 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       store = { ...store, registrations: [...store.registrations, r] };
       persist();
       return r;
+    },
+
+    /**
+     * Inscreve uma lista de uma vez (tudo ou nada): se qualquer linha for inválida,
+     * nenhuma inscrição é criada. `entries` já vem separada por "/" (ver registrationList).
+     */
+    registerMany: (categoryId: string, entries: string[][]): Registration[] => {
+      const cat = store.categories.find((c) => c.id === categoryId);
+      if (!cat) throw new Error("Categoria não encontrada");
+      if (entries.length === 0) throw new Error("A lista está vazia.");
+      const expected = cat.entryType === "doubles" ? 2 : 1;
+      entries.forEach((names, i) => {
+        if (names.length !== expected || names.some((n) => !n.trim())) {
+          throw new Error(
+            cat.entryType === "doubles"
+              ? `Linha ${i + 1}: dupla precisa de exatamente 2 nomes.`
+              : `Linha ${i + 1}: simples precisa de 1 nome.`,
+          );
+        }
+      });
+      return entries.map((names) => api.register({ categoryId, names }));
+    },
+
+    /** Remove uma inscrição. Só antes do sorteio: depois, grupos e jogos já dependem dela. */
+    removeRegistration: (registrationId: string) => {
+      const reg = store.registrations.find((r) => r.id === registrationId);
+      if (!reg) throw new Error("Inscrição não encontrada");
+      const cat = store.categories.find((c) => c.id === reg.categoryId);
+      if (!cat) throw new Error("Categoria não encontrada");
+      const hasDraw =
+        store.groups.some((g) => g.categoryId === cat.id) ||
+        store.matches.some((m) => m.categoryId === cat.id);
+      if (hasDraw) {
+        throw new Error("Já houve sorteio: gere os jogos de novo depois de ajustar as inscrições.");
+      }
+      const remaining = store.registrations.filter((r) => r.id !== registrationId);
+      const used = new Set(remaining.flatMap((r) => r.athleteIds));
+      store = {
+        ...store,
+        registrations: remaining,
+        athletes: store.athletes.filter((a) => used.has(a.id) || !reg.athleteIds.includes(a.id)),
+      };
+      persist();
     },
 
     generateDraw: (categoryId: string, rng?: () => number) => {
@@ -424,6 +474,9 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       const cat = store.categories.find((c) => c.id === categoryId);
       if (!cat || cat.format !== "GROUP_KO") throw new Error("Categoria G+C requerida");
       const groups = store.groups.filter((g) => g.categoryId === categoryId);
+      if (cat.numGroups === 1 && cat.advancersPerGroup === 0) {
+        throw new Error("Grupo único sem final: a categoria termina no grupo, não há eliminatória.");
+      }
       let pairings = resolveBracketPairings(
         cat.numGroups,
         cat.advancersPerGroup,
@@ -626,6 +679,41 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         ),
       };
       persist();
+    },
+
+    /**
+     * Exclui o torneio e tudo o que depende dele (categorias, inscrições, grupos, jogos,
+     * sorteios). Atletas que só existiam nesse torneio também saem do cadastro.
+     * Quem chama é responsável por despublicar as categorias publicadas (ver `publishedCategoryIds`).
+     */
+    deleteTournament: (
+      tournamentId: string,
+    ): { categoryIds: string[]; publishedCategoryIds: string[] } => {
+      const t = store.tournaments.find((x) => x.id === tournamentId);
+      if (!t) throw new Error("Torneio não encontrado");
+      const cats = store.categories.filter((c) => c.tournamentId === tournamentId);
+      const categoryIds = cats.map((c) => c.id);
+      const catSet = new Set(categoryIds);
+      const groupIds = new Set(
+        store.groups.filter((g) => catSet.has(g.categoryId)).map((g) => g.id),
+      );
+      const remainingRegs = store.registrations.filter((r) => !catSet.has(r.categoryId));
+      const usedAthletes = new Set(remainingRegs.flatMap((r) => r.athleteIds));
+      store = {
+        ...store,
+        tournaments: store.tournaments.filter((x) => x.id !== tournamentId),
+        categories: store.categories.filter((c) => !catSet.has(c.id)),
+        registrations: remainingRegs,
+        groups: store.groups.filter((g) => !catSet.has(g.categoryId)),
+        matches: store.matches.filter((m) => !catSet.has(m.categoryId)),
+        residualDraws: store.residualDraws.filter((d) => !groupIds.has(d.groupId)),
+        athletes: store.athletes.filter((a) => usedAthletes.has(a.id)),
+      };
+      persist();
+      return {
+        categoryIds,
+        publishedCategoryIds: cats.filter((c) => c.published).map((c) => c.id),
+      };
     },
 
     regName: (id?: string) =>

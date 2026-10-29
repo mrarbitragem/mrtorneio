@@ -106,6 +106,29 @@ export function useLetzmr() {
     [session.mode],
   );
 
+  const deleteTournament = useCallback(
+    async (tournamentId: string) => {
+      if (session.mode === "live" && !user?.id) {
+        throw new Error("Login de organizador obrigatório para excluir dados reais.");
+      }
+      const eng = getEngine();
+      // Despublica primeiro: se algo falhar, o torneio continua inteiro e consistente.
+      const publishedIds = eng
+        .getStore()
+        .categories.filter((c) => c.tournamentId === tournamentId && c.published)
+        .map((c) => c.id);
+      for (const id of publishedIds) {
+        const res = await syncPublishFlags(eng, id, false);
+        if (res.ok === false && session.mode === "live") throw new Error(res.message);
+      }
+      eng.deleteTournament(tournamentId);
+      const persistResult = await persistAfterMutation(eng);
+      if (persistResult.ok === false) throw new Error(persistResult.message);
+      emitStore();
+    },
+    [session.mode, user?.id],
+  );
+
   const reload = useCallback(async () => {
     await reloadLive(user?.id ?? null);
     emitStore();
@@ -121,6 +144,7 @@ export function useLetzmr() {
     loadDemo,
     hardReset,
     publishCategory,
+    deleteTournament,
     reload,
     eng: getEngine(),
   };

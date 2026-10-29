@@ -29,8 +29,14 @@ export function LetzmrTournamentPage() {
   const [error, setError] = useState("");
 
   const groupsN = Number(numGroups) || 2;
-  const advancersN = Number(advancers) || 2;
-  const seedingOptions = availableBracketSeedings(groupsN, advancersN);
+  const singleGroup = format === "GROUP_KO" && groupsN === 1;
+  // 0 é válido (grupo único que termina no grupo); só vazio/inválido cai no padrão 2.
+  const advancersParsed = advancers.trim() === "" ? NaN : Number(advancers);
+  const advancersN = Number.isFinite(advancersParsed) ? advancersParsed : 2;
+  const seedingOptions = availableBracketSeedings(
+    groupsN,
+    singleGroup ? (advancersN === 0 ? 0 : 2) : advancersN,
+  );
   const seedingBlocked = format === "GROUP_KO" && !seedingOptions[seeding].available;
 
   if (!t) {
@@ -93,11 +99,37 @@ export function LetzmrTournamentPage() {
                 <Label>Nº de grupos</Label>
                 <Input value={numGroups} onChange={(e) => setNumGroups(e.target.value)} />
               </div>
-              <div className="space-y-1">
-                <Label>Classificados por grupo</Label>
-                <Input value={advancers} onChange={(e) => setAdvancers(e.target.value)} />
-              </div>
-              <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+              {singleGroup ? (
+                <div className="space-y-1 sm:col-span-2">
+                  <Label>Grupo único: como termina?</Label>
+                  <Select
+                    value={advancersN === 0 ? "0" : "2"}
+                    onValueChange={(v) => setAdvancers(v)}
+                  >
+                    <SelectTrigger data-testid="single-group-mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Termina no grupo (todos contra todos)</SelectItem>
+                      <SelectItem value="2">1º e 2º do grupo jogam uma final</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                    {advancersN === 0
+                      ? "A classificação final é o ranking do grupo, com os critérios de desempate."
+                      : "Depois do grupo, o 1º e o 2º colocados disputam a final."}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label>Classificados por grupo</Label>
+                  <Input value={advancers} onChange={(e) => setAdvancers(e.target.value)} />
+                </div>
+              )}
+              <div
+                className="space-y-1 sm:col-span-2 lg:col-span-3"
+                hidden={singleGroup}
+              >
                 <Label>Posição dos classificados na chave</Label>
                 <Select value={seeding} onValueChange={(v) => setSeeding(v as BracketSeeding)}>
                   <SelectTrigger data-testid="bracket-seeding">
@@ -135,7 +167,7 @@ export function LetzmrTournamentPage() {
                 format,
                 entryType,
                 numGroups: groupsN,
-                advancersPerGroup: advancersN,
+                advancersPerGroup: singleGroup ? (advancersN === 0 ? 0 : 2) : advancersN,
                 bracketSeeding: seeding,
               }),
             )

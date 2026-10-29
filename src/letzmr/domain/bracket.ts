@@ -113,6 +113,32 @@ export const PRESET_BYE_3_QUALIFIERS: BracketPairing[] = [
 ];
 
 /**
+ * Grupo único com final: o 1º e o 2º do grupo jogam uma final.
+ * (Sem classificados, a categoria termina no grupo e não há eliminatória.)
+ */
+export const PRESET_SINGLE_GROUP_FINAL: BracketPairing[] = [
+  {
+    round: 1,
+    position: 1,
+    sideA: { kind: "group_rank", groupIndex: 1, rank: 1, label: "1º lugar do grupo" },
+    sideB: { kind: "group_rank", groupIndex: 1, rank: 2, label: "2º lugar do grupo" },
+  },
+];
+
+/** Grupo único: 0 classificados = termina no grupo; 2 = final entre o 1º e o 2º. */
+function isSingleGroupMode(numGroups: number, advancersPerGroup: number): boolean {
+  return numGroups === 1 && (advancersPerGroup === 0 || advancersPerGroup === 2);
+}
+
+function resolveSingleGroup(advancersPerGroup: number): BracketPairing[] {
+  if (advancersPerGroup === 0) return [];
+  if (advancersPerGroup === 2) return PRESET_SINGLE_GROUP_FINAL;
+  throw new Error(
+    "Grupo único: use 0 classificados (termina no grupo) ou 2 (final entre o 1º e o 2º).",
+  );
+}
+
+/**
  * Posicionamento por grupo ("1º G1 × 2º G3"). Só existe para as configurações
  * verificadas no LetzPlay: 2 ou 4 grupos com 2 classificados, ou 3 classificados no total.
  */
@@ -120,6 +146,7 @@ export function resolveBracketPreset(
   numGroups: number,
   advancersPerGroup: number,
 ): BracketPairing[] {
+  if (isSingleGroupMode(numGroups, advancersPerGroup)) return resolveSingleGroup(advancersPerGroup);
   if (numGroups === 2 && advancersPerGroup === 2) return PRESET_N2_ADV2;
   if (numGroups === 4 && advancersPerGroup === 2) return PRESET_N4_ADV2;
   const total = numGroups * advancersPerGroup;
@@ -143,7 +170,8 @@ const BYE: CrossSlot = { type: "bye" };
 export const CROSS_RANKING_TEMPLATES: Record<number, CrossSlot[]> = {
   2: [F(1), S(2), S(1), F(2)],
   3: [F(1), BYE, S(3), S(2), S(1), F(3), BYE, F(2)],
-  4: [F(1), S(4), F(3), S(2), S(1), F(4), S(3), F(2)],
+  // Confirmado pelo organizador (planilha "Chave com 4 grupos"): 1ºM×2ºdo3ºM, 4ºM×2ºdo2ºM, 2ºdo1ºM×3ºM, 2ºdo4ºM×2ºM.
+  4: [F(1), S(3), F(4), S(2), S(1), F(3), S(4), F(2)],
   5: [F(1), BYE, S(4), S(5), F(3), BYE, BYE, S(2), F(5), BYE, BYE, F(4), S(1), S(3), BYE, F(2)],
   6: [F(1), BYE, S(6), S(2), F(4), BYE, S(3), F(5), F(6), S(4), BYE, F(3), S(5), S(1), BYE, F(2)],
   7: [F(1), BYE, S(7), S(2), F(4), S(6), S(3), F(5), F(6), S(4), S(5), F(3), F(7), S(1), BYE, F(2)],
@@ -152,7 +180,7 @@ export const CROSS_RANKING_TEMPLATES: Record<number, CrossSlot[]> = {
 
 export const BRACKET_SEEDING_LABEL: Record<BracketSeeding, string> = {
   BY_GROUP: "Por grupo (1º G1 × 2º G3)",
-  CROSS_RANKING: "Ranking cruzado dos 1ºs (1º melhor 1º × 2º do 4º melhor 1º)",
+  CROSS_RANKING: "Ranking cruzado dos 1ºs (ex.: 1º melhor 1º × 2º do 3º melhor 1º)",
 };
 
 export const CROSS_RANKING_MIN_GROUPS = 2;
@@ -235,6 +263,10 @@ export function availableBracketSeedings(
   numGroups: number,
   advancersPerGroup: number,
 ): Record<BracketSeeding, { available: boolean; reason?: string }> {
+  if (isSingleGroupMode(numGroups, advancersPerGroup)) {
+    // A regra de posicionamento é irrelevante num grupo único.
+    return { BY_GROUP: { available: true }, CROSS_RANKING: { available: true } };
+  }
   const byGroup = (() => {
     try {
       resolveBracketPreset(numGroups, advancersPerGroup);
@@ -271,6 +303,8 @@ export function resolveBracketPairings(
   advancersPerGroup: number,
   seeding: BracketSeeding = "BY_GROUP",
 ): BracketPairing[] {
+  // Grupo único não tem o que posicionar: a regra de chave não se aplica.
+  if (isSingleGroupMode(numGroups, advancersPerGroup)) return resolveSingleGroup(advancersPerGroup);
   if (numGroups * advancersPerGroup === 3) return PRESET_BYE_3_QUALIFIERS;
   if (seeding === "CROSS_RANKING") {
     if (advancersPerGroup !== 2) {

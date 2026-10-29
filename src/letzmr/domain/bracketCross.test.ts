@@ -55,12 +55,33 @@ describe("regra de ranking cruzado (protótipo)", () => {
     }
   });
 
-  it("4 grupos: 1º melhor 1º enfrenta o 2º do 4º melhor 1º", () => {
+  it("4 grupos: segue a planilha do organizador", () => {
     const pairings = buildCrossRankingPairings(4);
-    expect(pairings[0].sideA).toMatchObject({ place: 1, seed: 1, label: "Melhor 1º colocado" });
-    expect(pairings[0].sideB).toMatchObject({ place: 2, seed: 4, label: "2º do 4º melhor 1º" });
+    const r1 = pairings
+      .filter((p) => p.round === 1)
+      .map((p) => [p.sideA, p.sideB].map((s) => (s.kind === "cross_rank" ? `${s.place === 1 ? "F" : "S"}${s.seed}` : "BYE")));
+    expect(r1).toEqual([
+      ["F1", "S3"],
+      ["F4", "S2"],
+      ["S1", "F3"],
+      ["S4", "F2"],
+    ]);
+    expect(pairings[0].sideA).toMatchObject({ label: "Melhor 1º colocado" });
+    expect(pairings[0].sideB).toMatchObject({ label: "2º do 3º melhor 1º" });
     expect(pairings.filter((p) => p.round === 2)).toHaveLength(2);
     expect(pairings.filter((p) => p.round === 3)).toHaveLength(1);
+  });
+
+  it("3 grupos: segue a planilha do organizador (2 BYEs)", () => {
+    const r1 = buildCrossRankingPairings(3)
+      .filter((p) => p.round === 1)
+      .map((p) => [p.sideA, p.sideB].map((s) => (s.kind === "cross_rank" ? `${s.place === 1 ? "F" : "S"}${s.seed}` : "BYE")));
+    expect(r1).toEqual([
+      ["F1", "BYE"],
+      ["S3", "S2"],
+      ["S1", "F3"],
+      ["BYE", "F2"],
+    ]);
   });
 
   it("exige 2 classificados por grupo e de 2 a 8 grupos", () => {
@@ -75,9 +96,9 @@ describe("regra de ranking cruzado (protótipo)", () => {
 
   it("troca 'k-ésimo melhor 1º' pelo grupo real", () => {
     const bound = bindCrossRanking(buildCrossRankingPairings(4), [4, 3, 2, 1]);
-    // melhor 1º = grupo 4; 2º do 4º melhor 1º = 2º do grupo 1
+    // melhor 1º = grupo 4; 2º do 3º melhor 1º = 2º do grupo 2
     expect(bound[0].sideA).toMatchObject({ kind: "group_rank", groupIndex: 4, rank: 1 });
-    expect(bound[0].sideB).toMatchObject({ kind: "group_rank", groupIndex: 1, rank: 2 });
+    expect(bound[0].sideB).toMatchObject({ kind: "group_rank", groupIndex: 2, rank: 2 });
     expect(pairingsUseCrossRanking(bound)).toBe(false);
     const ko = buildKoMatchesFromPreset("c", buildCrossRankingPairings(3));
     expect(ko.filter((m) => m.status === "bye")).toHaveLength(2);
