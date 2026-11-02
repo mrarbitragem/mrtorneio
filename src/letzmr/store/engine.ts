@@ -42,11 +42,20 @@ import type {
   SetScore,
   StandingRow,
   Tournament,
+  TournamentRegulation,
 } from "../domain/types";
 import { cleanName } from "../domain/names";
 import { emptyStore } from "./localStore";
 
 export type Engine = ReturnType<typeof createEngine>;
+
+export type ScheduleBatchOptions = {
+  startAt: string;
+  minutesPerMatch: number;
+  courts?: string[];
+  /** Todos os jogos no mesmo horário (a ordem é definida na hora). */
+  sameTime?: boolean;
+};
 
 export type EngineOptions = {
   organizerId?: string | null;
@@ -104,6 +113,53 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
   const hasDrawOf = (s: LetzmrStore, categoryId: string) =>
     s.groups.some((g) => g.categoryId === categoryId) ||
     s.matches.some((m) => m.categoryId === categoryId);
+
+  const isOpenMatch = (m: Match) =>
+    m.status !== "played" && m.status !== "wo" && m.status !== "bye";
+
+  const applyBatchSchedule = (
+    open: Match[],
+    opts: ScheduleBatchOptions,
+  ): { scheduled: number; conflicts: ScheduleConflict[] } => {
+    const start = new Date(opts.startAt);
+    if (Number.isNaN(start.getTime())) throw new Error("Informe a data e a hora do 1º jogo.");
+    if (!opts.sameTime && (!Number.isFinite(opts.minutesPerMatch) || opts.minutesPerMatch < 1)) {
+      throw new Error("Informe a duração de cada jogo em minutos.");
+    }
+    const courtLabel = (opts.courts ?? []).map((c) => c.trim()).filter(Boolean).join(" / ");
+    const plan = opts.sameTime
+      ? open.map((m) => ({
+          matchId: m.id,
+          scheduledAt: start.toISOString(),
+          court: courtLabel || undefined,
+        }))
+      : planGroupSchedule({
+          matches: open,
+          startAt: start,
+          minutesPerMatch: opts.minutesPerMatch,
+          courts: opts.courts,
+        });
+    const byId = new Map(plan.map((p) => [p.matchId, p]));
+    store = {
+      ...store,
+      matches: store.matches.map((m) => {
+        const p = byId.get(m.id);
+        if (!p) return m;
+        return {
+          ...m,
+          scheduledAt: p.scheduledAt,
+          court: p.court,
+          status: m.status === "pending" ? "scheduled" : m.status,
+        };
+      }),
+    };
+    const conflicts = findCrossCategoryConflicts({
+      matches: store.matches,
+      registrations: store.registrations,
+      athletes: store.athletes,
+    }).filter((c) => byId.has(c.matchAId) || byId.has(c.matchBId));
+    return { scheduled: plan.length, conflicts };
+  };
 
   const api = {
     getStore: () => store,
@@ -699,63 +755,34 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
      */
     scheduleGroup: (
       groupId: string,
-      opts: {
-        startAt: string;
-        minutesPerMatch: number;
-        courts?: string[];
-        /** Todos os jogos do grupo no mesmo horário (a ordem é definida na hora). */
-        sameTime?: boolean;
-      },
+      opts: ScheduleBatchOptions,
     ): { scheduled: number; conflicts: ScheduleConflict[] } => {
       const group = store.groups.find((g) => g.id === groupId);
       if (!group) throw new Error("Grupo não encontrado");
-      const start = new Date(opts.startAt);
-      if (Number.isNaN(start.getTime())) throw new Error("Informe a data e a hora do 1º jogo.");
-      if (!opts.sameTime && (!Number.isFinite(opts.minutesPerMatch) || opts.minutesPerMatch < 1)) {
-        throw new Error("Informe a duração de cada jogo em minutos.");
-      }
       const open = store.matches.filter(
-        (m) =>
-          m.groupId === groupId &&
-          m.phase === "GROUP" &&
-          m.status !== "played" &&
-          m.status !== "wo" &&
-          m.status !== "bye",
+        (m) => m.groupId === groupId && m.phase === "GROUP" && isOpenMatch(m),
       );
       if (open.length === 0) throw new Error("Não há jogos a programar neste grupo.");
-      const courtLabel = (opts.courts ?? []).map((c) => c.trim()).filter(Boolean).join(" / ");
-      const plan = opts.sameTime
-        ? open.map((m) => ({
-            matchId: m.id,
-            scheduledAt: start.toISOString(),
-            court: courtLabel || undefined,
-          }))
-        : planGroupSchedule({
-            matches: open,
-            startAt: start,
-            minutesPerMatch: opts.minutesPerMatch,
-            courts: opts.courts,
-          });
-      const byId = new Map(plan.map((p) => [p.matchId, p]));
-      store = {
-        ...store,
-        matches: store.matches.map((m) => {
-          const p = byId.get(m.id);
-          if (!p) return m;
-          return {
-            ...m,
-            scheduledAt: p.scheduledAt,
-            court: p.court,
-            status: m.status === "pending" ? "scheduled" : m.status,
-          };
-        }),
-      };
-      const conflicts = findCrossCategoryConflicts({
-        matches: store.matches,
-        registrations: store.registrations,
-        athletes: store.athletes,
-      }).filter((c) => byId.has(c.matchAId) || byId.has(c.matchBId));
-      return { scheduled: plan.length, conflicts };
+      return applyBatchSchedule(open, opts);
+    },
+
+    /**
+     * Programa de uma vez os jogos ainda não disputados de uma rodada da eliminatória
+     * (jogos com BYE ficam de fora). Vale mesmo que os adversários ainda não estejam definidos.
+     */
+    scheduleRound: (
+      categoryId: string,
+      round: number,
+      opts: ScheduleBatchOptions,
+    ): { scheduled: number; conflicts: ScheduleConflict[] } => {
+      const cat = store.categories.find((c) => c.id === categoryId);
+      if (!cat) throw new Error("Categoria não encontrada");
+      const open = store.matches.filter(
+        (m) =>
+          m.categoryId === categoryId && m.phase === "KO" && m.round === round && isOpenMatch(m),
+      );
+      if (open.length === 0) throw new Error("Não há jogos a programar nesta rodada.");
+      return applyBatchSchedule(open, opts);
     },
 
     setPublished: (categoryId: string, published: boolean) => {
@@ -767,6 +794,18 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
       };
     },
 
+    /** Liga ou desliga o aviso de ordem no grupo (definida no dia pelo árbitro). */
+    setRefereeOrderNotice: (categoryId: string, enabled: boolean) => {
+      const cat = store.categories.find((c) => c.id === categoryId);
+      if (!cat) throw new Error("Categoria não encontrada");
+      store = {
+        ...store,
+        categories: store.categories.map((c) =>
+          c.id === categoryId ? { ...c, showRefereeOrderNotice: enabled } : c,
+        ),
+      };
+    },
+
     completeCategory: (categoryId: string) => {
       store = {
         ...store,
@@ -774,6 +813,25 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
           c.id === categoryId ? { ...c, status: "completed" } : c,
         ),
       };
+    },
+
+    /** Define (ou remove, com null) o regulamento do torneio. Devolve o anterior. */
+    setRegulation: (
+      tournamentId: string,
+      regulation: TournamentRegulation | null,
+    ): { previous?: TournamentRegulation } => {
+      const t = store.tournaments.find((x) => x.id === tournamentId);
+      if (!t) throw new Error("Torneio não encontrado");
+      if (regulation && !/^https?:\/\//i.test(regulation.url)) {
+        throw new Error("O link do regulamento precisa começar com http:// ou https://.");
+      }
+      store = {
+        ...store,
+        tournaments: store.tournaments.map((x) =>
+          x.id === tournamentId ? { ...x, regulation: regulation ?? undefined } : x,
+        ),
+      };
+      return { previous: t.regulation };
     },
 
     /**

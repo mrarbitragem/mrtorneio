@@ -10,7 +10,20 @@ function shuffle<T>(arr: T[], rng: () => number = Math.random): T[] {
   return a;
 }
 
-/** Distribute registrations into N groups (snake by seed if present). */
+/**
+ * Tamanho de cada grupo: o restante vai para os últimos.
+ * 10 duplas em 3 grupos → [3, 3, 4]; 14 em 4 → [3, 3, 4, 4].
+ */
+export function groupCapacities(count: number, numGroups: number): number[] {
+  if (numGroups < 1) throw new Error("numGroups inválido");
+  const base = Math.floor(count / numGroups);
+  const extra = count % numGroups;
+  return Array.from({ length: numGroups }, (_, i) =>
+    i >= numGroups - extra ? base + 1 : base,
+  );
+}
+
+/** Distribui inscritos em N grupos; grupos maiores ficam no fim. */
 export function assignGroups(
   categoryId: string,
   registrations: Registration[],
@@ -38,11 +51,24 @@ export function assignGroups(
   );
   const withSeed = seeded.filter((r) => r.seed != null);
   const order = [...withSeed, ...unseeded];
+  const capacities = groupCapacities(order.length, numGroups);
+  const filled = capacities.map(() => 0);
 
-  const updated = order.map((r, idx) => ({
-    ...r,
-    groupId: groups[idx % numGroups].id,
-  }));
+  let cursor = 0;
+  const updated = order.map((r) => {
+    let steps = 0;
+    while (filled[cursor] >= capacities[cursor]) {
+      cursor = (cursor + 1) % numGroups;
+      steps += 1;
+      if (steps > numGroups) {
+        throw new Error("Não foi possível distribuir as duplas nos grupos.");
+      }
+    }
+    const groupIndex = cursor;
+    filled[groupIndex] += 1;
+    cursor = (cursor + 1) % numGroups;
+    return { ...r, groupId: groups[groupIndex].id };
+  });
 
   return { groups, registrations: updated };
 }

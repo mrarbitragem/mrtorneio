@@ -52,12 +52,15 @@ function build(opts: {
 
 describe("torneio completo até o campeão", () => {
   for (const seeding of ["BY_GROUP", "CROSS_RANKING"] as const) {
-    it(`4 grupos, 14 duplas (grupos 4-4-3-3), regra ${seeding}`, () => {
+    it(`4 grupos, 14 duplas (grupos 3-3-4-4), regra ${seeding}`, () => {
       const { eng, cat } = build({ numGroups: 4, advancersPerGroup: 2, pairs: 14, seeding });
-      const groups = eng.getStore().groups.filter((g) => g.categoryId === cat.id);
-      const sizes = groups
-        .map((g) => eng.getStore().registrations.filter((r) => r.groupId === g.id).length)
-        .sort();
+      const groups = eng
+        .getStore()
+        .groups.filter((g) => g.categoryId === cat.id)
+        .sort((a, b) => a.index - b.index);
+      const sizes = groups.map(
+        (g) => eng.getStore().registrations.filter((r) => r.groupId === g.id).length,
+      );
       expect(sizes).toEqual([3, 3, 4, 4]);
 
       playAllReady(eng, cat.id, "GROUP");
@@ -448,5 +451,53 @@ describe("nomes com caracteres invisíveis", () => {
     expect(loaded.getStore().registrations[0].displayName).toBe("Guilherme / Daniel");
     expect(loaded.regName(reg.id)).toBe("Guilherme / Daniel");
     expect(loaded.getStore().athletes.map((a) => a.displayName)).toEqual(["Guilherme", "Daniel"]);
+  });
+});
+
+describe("aviso de ordem no grupo", () => {
+  it("liga e desliga o aviso da categoria", () => {
+    const { eng, cat } = build({ numGroups: 1, advancersPerGroup: 0, pairs: 4 });
+    expect(cat.showRefereeOrderNotice).toBeUndefined();
+    eng.setRefereeOrderNotice(cat.id, true);
+    expect(eng.getStore().categories.find((c) => c.id === cat.id)?.showRefereeOrderNotice).toBe(
+      true,
+    );
+    eng.setRefereeOrderNotice(cat.id, false);
+    expect(eng.getStore().categories.find((c) => c.id === cat.id)?.showRefereeOrderNotice).toBe(
+      false,
+    );
+  });
+
+  it("recusa categoria inexistente", () => {
+    const { eng } = build({ numGroups: 1, advancersPerGroup: 0, pairs: 4 });
+    expect(() => eng.setRefereeOrderNotice("nao-existe", true)).toThrow("Categoria não encontrada");
+  });
+});
+
+describe("programar toda a rodada da eliminatória", () => {
+  it("marca os jogos da 1ª rodada no mesmo horário e deixa as fases seguintes sem horário", () => {
+    const { eng, cat } = build({ numGroups: 4, advancersPerGroup: 2, pairs: 14, seeding: "BY_GROUP" });
+    const res = eng.scheduleRound(cat.id, 1, {
+      startAt: "2026-11-07T14:00:00.000Z",
+      minutesPerMatch: 1,
+      sameTime: true,
+      courts: ["Quadra 1", "Quadra 2"],
+    });
+    expect(res.scheduled).toBeGreaterThanOrEqual(4);
+    const ko = eng.getStore().matches.filter((m) => m.categoryId === cat.id && m.phase === "KO");
+    const r1 = ko.filter((m) => m.round === 1 && m.status !== "bye");
+    expect(r1.every((m) => m.scheduledAt === "2026-11-07T14:00:00.000Z")).toBe(true);
+    expect(ko.filter((m) => m.round > 1).every((m) => !m.scheduledAt)).toBe(true);
+  });
+
+  it("recusa rodada sem jogos pendentes", () => {
+    const { eng, cat } = build({ numGroups: 2, advancersPerGroup: 2, pairs: 8, seeding: "BY_GROUP" });
+    expect(() =>
+      eng.scheduleRound(cat.id, 9, {
+        startAt: "2026-11-07T14:00:00.000Z",
+        minutesPerMatch: 1,
+        sameTime: true,
+      }),
+    ).toThrow();
   });
 });

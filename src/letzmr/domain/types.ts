@@ -12,6 +12,16 @@ export interface Place {
   slug: string;
 }
 
+/** Regulamento do torneio: arquivo enviado ao Storage ou link externo. */
+export interface TournamentRegulation {
+  url: string;
+  /** Nome mostrado ao público (nome do arquivo ou título do link). */
+  name: string;
+  /** Caminho no Storage, quando for arquivo enviado (para poder apagar depois). */
+  storagePath?: string;
+  updatedAt: string;
+}
+
 export interface Tournament {
   id: string;
   placeId: string;
@@ -20,6 +30,7 @@ export interface Tournament {
   organizerId?: string;
   startsOn?: string;
   endsOn?: string;
+  regulation?: TournamentRegulation;
   status: "draft" | "open" | "in_progress" | "completed";
   createdAt: string;
 }
@@ -52,6 +63,11 @@ export interface Category {
   crossTieDrawnAt?: string;
   status: CategoryStatus;
   published: boolean;
+  /**
+   * Se verdadeiro, cada grupo mostra o aviso de que a ordem dos jogos
+   * é definida no dia pelo árbitro (consulta pública e painel).
+   */
+  showRefereeOrderNotice?: boolean;
   createdAt: string;
 }
 

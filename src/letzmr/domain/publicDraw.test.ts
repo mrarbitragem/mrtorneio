@@ -3,6 +3,8 @@ import {
   describeMatchResult,
   formatSetScore,
   isGroupComplete,
+  matchStatusLabel,
+  REFEREE_ORDER_NOTICE,
   standingsNeededTieBreak,
 } from "./publicDraw";
 import type { Match, StandingRow } from "./types";
@@ -18,6 +20,14 @@ function match(status: Match["status"]): Match {
     status,
   };
 }
+
+describe("aviso de ordem no grupo", () => {
+  it("explica que a ordem fica com o árbitro no dia", () => {
+    expect(REFEREE_ORDER_NOTICE).toMatch(/árbitro/);
+    expect(matchStatusLabel("pending")).toBe("Pendente");
+    expect(matchStatusLabel("scheduled")).toBe("Programado");
+  });
+});
 
 describe("visibilidade dos jogos do grupo", () => {
   it("mantém o grupo aberto enquanto falta resultado", () => {

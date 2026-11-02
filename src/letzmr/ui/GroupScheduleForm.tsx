@@ -33,7 +33,7 @@ export function GroupScheduleForm({
       data-testid={`schedule-group-${groupId}`}
     >
       <div className="space-y-1">
-        <Label className="text-xs">1º jogo do {groupLabel}</Label>
+        <Label className="text-xs">Horário do {groupLabel}</Label>
         <Input
           type="datetime-local"
           className="w-48"

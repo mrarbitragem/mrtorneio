@@ -9,9 +9,10 @@ import {
   knockoutRoundTitle,
   describeMatchResult,
   matchNumberIndex,
+  REFEREE_ORDER_NOTICE,
   standingsNeededTieBreak,
 } from "../domain/publicDraw";
-import type { Group, LetzmrStore, Match, SetScore, StandingRow } from "../domain/types";
+import type { Group, LetzmrStore, Match, StandingRow } from "../domain/types";
 import { createEngine } from "../store/engine";
 import { PublicBracket } from "./PublicBracket";
 import { PublicGroupTable } from "./PublicGroupTable";
@@ -28,18 +29,19 @@ function MatchLine({
   nameOf,
 }: {
   match: Match;
-  number: number;
-  phase: string;
+  number?: number;
+  phase?: string;
   nameOf: (id?: string, placeholder?: string) => string;
 }) {
   const left = nameOf(match.sideAId, match.placeholderA);
   const right = nameOf(match.sideBId, match.placeholderB);
   const result = describeMatchResult(match, (id) => nameOf(id));
+  const meta = [number != null ? `Jogo #${number}` : null, phase].filter(Boolean).join(" · ");
   return (
     <article className="border-b border-[hsl(var(--border))] py-3 text-sm" data-testid="match-line">
-      <p className="text-xs text-[hsl(var(--muted-foreground))]">
-        Jogo #{number} · {phase}
-      </p>
+      {meta ? (
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">{meta}</p>
+      ) : null}
       <div className="mt-1 flex items-start justify-between gap-3">
         <div>
           {pairLines(left).map((line) => (
@@ -73,6 +75,7 @@ export function PublicCategoryView({
   categoryName: string;
 }) {
   const eng = useMemo(() => createEngine(store), [store]);
+  const category = store.categories.find((item) => item.id === categoryId);
   const groups = store.groups
     .filter((group) => group.categoryId === categoryId)
     .sort((a, b) => a.index - b.index);
@@ -80,6 +83,7 @@ export function PublicCategoryView({
   const numbers = useMemo(() => matchNumberIndex(matches, groups), [matches, groups]);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [rulesOpen, setRulesOpen] = useState<Record<string, boolean>>({});
+  const showRefereeOrderNotice = Boolean(category?.showRefereeOrderNotice);
 
   const nameOf = (id?: string, placeholder?: string) =>
     id ? eng.regName(id) : placeholder || "A definir";
@@ -111,7 +115,6 @@ export function PublicCategoryView({
               key={group.id}
               group={group}
               matches={matches}
-              numbers={numbers}
               ranked={eng.getGroupStandings(group.id).ranked}
               nameOf={nameOf}
               matchesOpen={Boolean(openGroups[group.id])}
@@ -122,6 +125,7 @@ export function PublicCategoryView({
               onToggleRules={() =>
                 setRulesOpen((current) => ({ ...current, [group.id]: !current[group.id] }))
               }
+              showRefereeOrderNotice={showRefereeOrderNotice}
             />
           ))}
         </TabsContent>
@@ -145,23 +149,23 @@ export function PublicCategoryView({
 function GroupBlock({
   group,
   matches,
-  numbers,
   ranked,
   nameOf,
   matchesOpen,
   onToggleMatches,
   rulesOpen,
   onToggleRules,
+  showRefereeOrderNotice,
 }: {
   group: Group;
   matches: Match[];
-  numbers: Map<string, number>;
   ranked: StandingRow[];
   nameOf: (id?: string, placeholder?: string) => string;
   matchesOpen: boolean;
   onToggleMatches: () => void;
   rulesOpen: boolean;
   onToggleRules: () => void;
+  showRefereeOrderNotice: boolean;
 }) {
   const groupMatches = matches
     .filter((match) => match.groupId === group.id && match.phase === "GROUP")
@@ -201,12 +205,15 @@ function GroupBlock({
       ) : null}
       {(!complete || matchesOpen) && (
         <div data-testid="group-matches">
+          {showRefereeOrderNotice && (
+            <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]" data-testid="referee-order-notice">
+              {REFEREE_ORDER_NOTICE}
+            </p>
+          )}
           {groupMatches.map((match) => (
             <MatchLine
               key={match.id}
               match={match}
-              number={numbers.get(match.id) ?? match.position}
-              phase={groupPhaseLabel(group)}
               nameOf={nameOf}
             />
           ))}
@@ -266,7 +273,7 @@ function ScheduleList({
                 <MatchLine
                   key={match.id}
                   match={match}
-                  number={numbers.get(match.id) ?? match.position}
+                  number={match.phase === "KO" ? (numbers.get(match.id) ?? match.position) : undefined}
                   phase={phase}
                   nameOf={nameOf}
                 />

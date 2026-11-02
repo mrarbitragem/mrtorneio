@@ -12,8 +12,14 @@ import type {
   Match,
   ScheduleConflict,
 } from "../domain/types";
+import {
+  matchNumberIndex,
+  matchStatusLabel,
+  REFEREE_ORDER_NOTICE,
+} from "../domain/publicDraw";
 import { GroupScheduleForm } from "./GroupScheduleForm";
 import { CategorySetupPanel } from "./CategorySetupPanel";
+import { OrganizerBracket } from "./OrganizerBracket";
 import { useLetzmr } from "./useLetzmr";
 
 /** ISO (UTC) -> valor local para <input type="datetime-local"> (sem deslocar o fuso). */
@@ -37,6 +43,10 @@ export function LetzmrCategoryPage() {
   const koMatches = matches
     .filter((m) => m.phase === "KO")
     .sort((a, b) => a.round - b.round || a.position - b.position);
+  const matchNumbers = useMemo(
+    () => matchNumberIndex(matches, groups),
+    [matches, groups],
+  );
 
   const [p1, setP1] = useState("");
   const [p2, setP2] = useState("");
@@ -122,7 +132,7 @@ export function LetzmrCategoryPage() {
             {m.placeholderB || nameOf(m.sideBId)}
           </p>
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            {m.phase} R{m.round} #{m.position} · {m.status}
+            {matchStatusLabel(m.status)}
             {m.winnerRegistrationId
               ? ` · vencedor: ${nameOf(m.winnerRegistrationId)}`
               : ""}
@@ -900,7 +910,32 @@ export function LetzmrCategoryPage() {
 
       {groupMatches.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Jogos de grupo</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Jogos de grupo</h2>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={Boolean(cat.showRefereeOrderNotice)}
+                data-testid="referee-order-notice"
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  void run((engine) => engine.setRefereeOrderNotice(cat.id, enabled))
+                    .then(() => {
+                      setMsg(
+                        enabled
+                          ? "Aviso da ordem habilitado nos grupos."
+                          : "Aviso da ordem desligado.",
+                      );
+                      setWarn("");
+                    })
+                    .catch((err) =>
+                      setWarn(err instanceof Error ? err.message : "Erro"),
+                    );
+                }}
+              />
+              Mostrar aviso nos grupos: ordem definida no dia pelo árbitro
+            </label>
+          </div>
           <div className="space-y-6">
             {[...groups]
               .sort((a, b) => a.index - b.index)
@@ -912,6 +947,14 @@ export function LetzmrCategoryPage() {
                 return (
                   <div key={g.id} className="space-y-2">
                     <h3 className="font-medium">{g.label}</h3>
+                    {cat.showRefereeOrderNotice && (
+                      <p
+                        className="text-sm text-[hsl(var(--muted-foreground))]"
+                        data-testid="referee-order-notice-text"
+                      >
+                        {REFEREE_ORDER_NOTICE}
+                      </p>
+                    )}
                     <GroupScheduleForm
                       groupId={g.id}
                       groupLabel={g.label}
@@ -933,7 +976,87 @@ export function LetzmrCategoryPage() {
       {koMatches.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Eliminatória</h2>
-          <div className="space-y-2">{koMatches.map(renderMatchRow)}</div>
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            O calendário ao lado da rodada programa todos os jogos dela. Em cada
+            jogo, “opções” altera só aquele horário.
+          </p>
+          <OrganizerBracket
+            categoryId={cat.id}
+            matches={koMatches}
+            numbers={matchNumbers}
+            nameOf={(id, placeholder) => (id ? nameOf(id) : (placeholder ?? "Aguardando"))}
+            onRequestCancel={(id) => {
+              try {
+                setImpact(eng.previewCancelImpact(id));
+                setPendingCancelId(id);
+                setWarn("");
+              } catch (err) {
+                setWarn(err instanceof Error ? err.message : "Erro");
+              }
+            }}
+            cancelPanelFor={(m) =>
+              pendingCancelId === m.id && impact ? (
+                <div
+                  className={
+                    "space-y-3 border-t p-2 " +
+                    (impact.divergenceWarning
+                      ? "border-[hsl(var(--destructive))] bg-red-50"
+                      : "border-[hsl(var(--border))] bg-[hsl(var(--muted))]")
+                  }
+                  data-testid="cancel-panel"
+                >
+                  <p className="font-medium">
+                    {impact.divergenceWarning
+                      ? "Atenção: isso pode mudar a classificação"
+                      : "Cancelar este resultado?"}
+                  </p>
+                  <p className="text-sm">{impact.message}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      type="button"
+                      onClick={() => {
+                        void run((e) =>
+                          e.cancelScore(m.id, {
+                            correctionKind: "score_only",
+                            confirmClear: false,
+                          }),
+                        )
+                          .then(() => {
+                            setImpact(null);
+                            setPendingCancelId(null);
+                            setWarn("");
+                            setMsg("Resultado cancelado.");
+                          })
+                          .catch((err) =>
+                            setWarn(err instanceof Error ? err.message : "Erro"),
+                          );
+                      }}
+                    >
+                      Sim, cancelar o resultado
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      type="button"
+                      onClick={() => {
+                        setImpact(null);
+                        setPendingCancelId(null);
+                      }}
+                    >
+                      Voltar
+                    </Button>
+                  </div>
+                </div>
+              ) : null
+            }
+            onMessage={(message) => {
+              setMsg(message);
+              setWarn("");
+            }}
+            onError={(message) => setWarn(message)}
+            onConflicts={setConflicts}
+          />
         </section>
       )}
     </div>

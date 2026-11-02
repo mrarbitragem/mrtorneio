@@ -87,11 +87,31 @@ export function knockoutRoundTitle(matchCount: number): string {
 
 /** Título da coluna da chave, por extenso: "Oitavas", "Quartas", "Semifinal", "Final". */
 export function knockoutRoundLabel(matchCount: number): string {
-  if (matchCount >= 8) return "Oitavas de final";
-  if (matchCount === 4) return "Quartas de final";
+  if (matchCount >= 8) return "Oitavas de Final";
+  if (matchCount === 4) return "Quartas de Final";
   if (matchCount === 2) return "Semifinal";
   if (matchCount === 1) return "Final";
   return `Rodada (${matchCount} jogos)`;
+}
+
+export const REFEREE_ORDER_NOTICE =
+  "Os jogos não têm ordem fixa. A ordem é definida no dia pelo árbitro.";
+
+export function matchStatusLabel(status: Match["status"]): string {
+  switch (status) {
+    case "pending":
+      return "Pendente";
+    case "scheduled":
+      return "Programado";
+    case "played":
+      return "Encerrado";
+    case "wo":
+      return "W.O.";
+    case "bye":
+      return "BYE";
+    default:
+      return status;
+  }
 }
 
 export function groupPhaseLabel(group: Group | undefined): string {
