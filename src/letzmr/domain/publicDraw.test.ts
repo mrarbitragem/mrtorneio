@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  abbreviateCategoryName,
   describeMatchResult,
   formatAvg,
   formatSetScore,
@@ -120,5 +121,16 @@ describe("describeMatchResult", () => {
       ),
     ).toBe("Carla / Dani vence por W.O.");
     expect(describeMatchResult({ ...base, status: "scheduled" }, nameOf)).toBeNull();
+  });
+});
+
+describe("abreviação da categoria na linha do jogo", () => {
+  it("encurta gênero e nível para caber na tabela", () => {
+    expect(abbreviateCategoryName("Feminina Avançada")).toBe("Fem. Av.");
+    expect(abbreviateCategoryName("Masculina Avançada")).toBe("Masc. Av.");
+    expect(abbreviateCategoryName("Feminina Intermediária")).toBe("Fem. Int.");
+    expect(abbreviateCategoryName("Masculina Iniciante")).toBe("Masc. Inic.");
+    expect(abbreviateCategoryName("Mista Avançada")).toBe("Mista Av.");
+    expect(abbreviateCategoryName("Open")).toBe("Open");
   });
 });

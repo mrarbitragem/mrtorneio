@@ -34,16 +34,22 @@ export function pairNames(name: string): string[] {
 export function PairAvatars({
   names,
   className,
+  size = "md",
 }: {
   names: string[];
   className?: string;
+  size?: "md" | "sm";
 }) {
+  const circle =
+    size === "sm"
+      ? "h-6 w-6 text-[10px]"
+      : "h-8 w-8 text-sm";
   return (
     <div className={cn("flex shrink-0 -space-x-1.5", className)} aria-hidden="true">
       {names.slice(0, 2).map((n) => (
         <span
           key={n}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-white text-sm font-semibold text-white ${colorFor(n)}`}
+          className={`flex ${circle} shrink-0 items-center justify-center rounded-full border-2 border-white font-semibold text-white ${colorFor(n)}`}
         >
           {initials(n)}
         </span>

@@ -130,7 +130,46 @@ export function matchStatusLabel(status: Match["status"]): string {
 
 export function groupPhaseLabel(group: Group | undefined): string {
   const index = String(group?.index ?? 0).padStart(2, "0");
-  return `Fase de grupos - G${index}`;
+  return `G${index}`;
+}
+
+const CATEGORY_ABBREV: Record<string, string> = {
+  feminina: "Fem.",
+  feminino: "Fem.",
+  masculina: "Masc.",
+  masculino: "Masc.",
+  mista: "Mista",
+  misto: "Misto",
+  avancada: "Av.",
+  avancado: "Av.",
+  intermediaria: "Int.",
+  intermediario: "Int.",
+  iniciante: "Inic.",
+  principiante: "Princ.",
+  amadora: "Amad.",
+  amador: "Amad.",
+};
+
+function foldWord(word: string): string {
+  return word
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/** Feminina Avançada → Fem. Av. — cabe na linha do jogo ao lado da tabela. */
+export function abbreviateCategoryName(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return name;
+  return words
+    .map((word) => {
+      const key = foldWord(word);
+      if (CATEGORY_ABBREV[key]) return CATEGORY_ABBREV[key];
+      if (word.length <= 4) return word;
+      return `${word.slice(0, 3)}.`;
+    })
+    .join(" ");
 }
 
 export function formatScheduleWhen(iso?: string): string {
@@ -148,4 +187,21 @@ export function formatScheduleWhen(iso?: string): string {
     timeZone: "America/Sao_Paulo",
   }).format(d);
   return `${date} às ${time}`;
+}
+
+/** Dia e hora curtos na linha do jogo: 04/11 18:30. */
+export function formatScheduleCompact(iso?: string): string {
+  if (!iso) return "Sem horário";
+  const d = new Date(iso);
+  const date = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(d);
+  const time = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(d);
+  return `${date} ${time}`;
 }
