@@ -37,6 +37,15 @@ export const TIEBREAK_RULES = [
   "Se nessa sequência restarem só duas duplas, vale de novo o confronto direto.",
 ];
 
+/** Aproveitamento de games: vencidos ÷ jogados. Sem games, "—". */
+export function formatAvg(gamePct: number | null): string {
+  if (gamePct == null || Number.isNaN(gamePct)) return "—";
+  return `${gamePct.toLocaleString("pt-BR", {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+  })}%`;
+}
+
 /** Texto público do set: só games, sem dígito de tie-break (7x6, 9x8). */
 export function formatSetScore(set: SetScore): string {
   return `${set.gamesA}x${set.gamesB}`;
@@ -97,6 +106,11 @@ export function knockoutRoundLabel(matchCount: number): string {
 export const REFEREE_ORDER_NOTICE =
   "Os jogos não têm ordem fixa. A ordem é definida no dia pelo árbitro.";
 
+/** Ausente nos dados antigos conta como ligado: a ordem do grupo é do árbitro. */
+export function shouldShowRefereeOrderNotice(flag?: boolean): boolean {
+  return flag !== false;
+}
+
 export function matchStatusLabel(status: Match["status"]): string {
   switch (status) {
     case "pending":
@@ -121,12 +135,17 @@ export function groupPhaseLabel(group: Group | undefined): string {
 
 export function formatScheduleWhen(iso?: string): string {
   if (!iso) return "Sem horário definido";
-  return new Intl.DateTimeFormat("pt-BR", {
+  const d = new Date(iso);
+  const date = new Intl.DateTimeFormat("pt-BR", {
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(d);
+  const time = new Intl.DateTimeFormat("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "America/Sao_Paulo",
-  }).format(new Date(iso));
+  }).format(d);
+  return `${date} às ${time}`;
 }

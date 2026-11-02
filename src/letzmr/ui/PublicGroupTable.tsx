@@ -1,4 +1,6 @@
+import { cn } from "@/lib/utils";
 import { cleanName } from "../domain/names";
+import { formatAvg } from "../domain/publicDraw";
 import type { StandingRow } from "../domain/types";
 
 const AVATAR_COLORS = [
@@ -24,9 +26,20 @@ function initials(name: string): string {
   return first ? first.toUpperCase() : "?";
 }
 
-function PairAvatars({ names }: { names: string[] }) {
+export function pairNames(name: string): string[] {
+  const parts = name.split(" / ").map((part) => part.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : ["A definir"];
+}
+
+export function PairAvatars({
+  names,
+  className,
+}: {
+  names: string[];
+  className?: string;
+}) {
   return (
-    <div className="hidden shrink-0 -space-x-1.5 sm:flex" aria-hidden="true">
+    <div className={cn("flex shrink-0 -space-x-1.5", className)} aria-hidden="true">
       {names.slice(0, 2).map((n) => (
         <span
           key={n}
@@ -67,7 +80,7 @@ function Stat({
   );
 }
 
-/** Classificação do grupo: posição, jogos, vitórias, derrotas, sets e games. */
+/** Classificação do grupo: posição, jogos, vitórias, derrotas, games e AVG. */
 export function PublicGroupTable({
   rows,
   nameOf,
@@ -86,17 +99,14 @@ export function PublicGroupTable({
             <th className={`${head} text-center`}><span className="hidden sm:inline">Jogos</span><span className="sm:hidden">J</span></th>
             <th className={`${head} text-center ${SHADE}`}><span className="hidden sm:inline">Vitórias</span><span className="sm:hidden">V</span></th>
             <th className={`${head} text-center`}><span className="hidden sm:inline">Derrotas</span><span className="sm:hidden">D</span></th>
-            <th className={`${head} text-center ${SHADE}`}>Sets</th>
-            <th className={`${head} text-center`}>Games</th>
+            <th className={`${head} text-center ${SHADE}`}>Games</th>
+            <th className={`${head} text-center`} title="Games vencidos ÷ games jogados">AVG</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => {
-            const name = nameOf(row.registrationId);
-            const names = name
-              .split(" / ")
-              .map((p) => p.trim())
-              .filter(Boolean);
+            const names = pairNames(nameOf(row.registrationId));
+            const gamesPlayed = row.gamesFor + row.gamesAgainst;
             return (
               <tr
                 key={row.registrationId}
@@ -105,7 +115,7 @@ export function PublicGroupTable({
               >
                 <td className="py-3 pr-1 sm:px-2">
                   <div className="flex items-center gap-3">
-                    <PairAvatars names={names} />
+                    <PairAvatars names={names} className="hidden sm:flex" />
                     <div className="min-w-0">
                       {(names.length ? names : ["A definir"]).map((line) => (
                         <p key={line} className="text-sm leading-tight sm:text-base">
@@ -120,13 +130,13 @@ export function PublicGroupTable({
                 <Stat main={row.wins} shaded />
                 <Stat main={row.losses} />
                 <Stat
-                  main={signed(row.setDiff)}
-                  detail={`${row.setsFor} / ${row.setsAgainst}`}
+                  main={signed(row.gameDiff)}
+                  detail={`${row.gamesFor} / ${row.gamesAgainst}`}
                   shaded
                 />
                 <Stat
-                  main={signed(row.gameDiff)}
-                  detail={`${row.gamesFor} / ${row.gamesAgainst}`}
+                  main={formatAvg(row.gamePct)}
+                  detail={gamesPlayed > 0 ? `${row.gamesFor}/${gamesPlayed}` : undefined}
                 />
               </tr>
             );

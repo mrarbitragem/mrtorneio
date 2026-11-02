@@ -457,7 +457,7 @@ describe("nomes com caracteres invisíveis", () => {
 describe("aviso de ordem no grupo", () => {
   it("liga e desliga o aviso da categoria", () => {
     const { eng, cat } = build({ numGroups: 1, advancersPerGroup: 0, pairs: 4 });
-    expect(cat.showRefereeOrderNotice).toBeUndefined();
+    expect(cat.showRefereeOrderNotice).toBe(true);
     eng.setRefereeOrderNotice(cat.id, true);
     expect(eng.getStore().categories.find((c) => c.id === cat.id)?.showRefereeOrderNotice).toBe(
       true,

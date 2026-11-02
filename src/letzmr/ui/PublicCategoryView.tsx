@@ -7,61 +7,16 @@ import {
   groupTieBreakSummary,
   isGroupComplete,
   knockoutRoundTitle,
-  describeMatchResult,
   matchNumberIndex,
   REFEREE_ORDER_NOTICE,
+  shouldShowRefereeOrderNotice,
   standingsNeededTieBreak,
 } from "../domain/publicDraw";
 import type { Group, LetzmrStore, Match, StandingRow } from "../domain/types";
 import { createEngine } from "../store/engine";
+import { GroupMatchRow } from "./GroupMatchRow";
 import { PublicBracket } from "./PublicBracket";
 import { PublicGroupTable } from "./PublicGroupTable";
-
-function pairLines(name: string): string[] {
-  const parts = name.split(" / ").map((part) => part.trim()).filter(Boolean);
-  return parts.length > 0 ? parts : ["A definir"];
-}
-
-function MatchLine({
-  match,
-  number,
-  phase,
-  nameOf,
-}: {
-  match: Match;
-  number?: number;
-  phase?: string;
-  nameOf: (id?: string, placeholder?: string) => string;
-}) {
-  const left = nameOf(match.sideAId, match.placeholderA);
-  const right = nameOf(match.sideBId, match.placeholderB);
-  const result = describeMatchResult(match, (id) => nameOf(id));
-  const meta = [number != null ? `Jogo #${number}` : null, phase].filter(Boolean).join(" · ");
-  return (
-    <article className="border-b border-[hsl(var(--border))] py-3 text-sm" data-testid="match-line">
-      {meta ? (
-        <p className="text-xs text-[hsl(var(--muted-foreground))]">{meta}</p>
-      ) : null}
-      <div className="mt-1 flex items-start justify-between gap-3">
-        <div>
-          {pairLines(left).map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-        </div>
-        <div className="text-right">
-          {pairLines(right).map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-        </div>
-      </div>
-      {result && (
-        <p className="mt-2 font-semibold" data-testid="match-result">
-          {result}
-        </p>
-      )}
-    </article>
-  );
-}
 
 export function PublicCategoryView({
   store,
@@ -83,7 +38,9 @@ export function PublicCategoryView({
   const numbers = useMemo(() => matchNumberIndex(matches, groups), [matches, groups]);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [rulesOpen, setRulesOpen] = useState<Record<string, boolean>>({});
-  const showRefereeOrderNotice = Boolean(category?.showRefereeOrderNotice);
+  const showRefereeOrderNotice = shouldShowRefereeOrderNotice(
+    category?.showRefereeOrderNotice,
+  );
 
   const nameOf = (id?: string, placeholder?: string) =>
     id ? eng.regName(id) : placeholder || "A definir";
@@ -117,6 +74,7 @@ export function PublicCategoryView({
               matches={matches}
               ranked={eng.getGroupStandings(group.id).ranked}
               nameOf={nameOf}
+              categoryName={categoryName}
               matchesOpen={Boolean(openGroups[group.id])}
               onToggleMatches={() =>
                 setOpenGroups((current) => ({ ...current, [group.id]: !current[group.id] }))
@@ -139,10 +97,26 @@ export function PublicCategoryView({
         </TabsContent>
 
         <TabsContent value="horarios">
-          <ScheduleList matches={matches} groups={groups} numbers={numbers} nameOf={nameOf} />
+          <ScheduleList
+            matches={matches}
+            groups={groups}
+            nameOf={nameOf}
+            categoryName={categoryName}
+          />
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function RefereeOrderNotice() {
+  return (
+    <p
+      className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-3 py-2 text-sm"
+      data-testid="referee-order-notice"
+    >
+      {REFEREE_ORDER_NOTICE}
+    </p>
   );
 }
 
@@ -151,6 +125,7 @@ function GroupBlock({
   matches,
   ranked,
   nameOf,
+  categoryName,
   matchesOpen,
   onToggleMatches,
   rulesOpen,
@@ -161,6 +136,7 @@ function GroupBlock({
   matches: Match[];
   ranked: StandingRow[];
   nameOf: (id?: string, placeholder?: string) => string;
+  categoryName: string;
   matchesOpen: boolean;
   onToggleMatches: () => void;
   rulesOpen: boolean;
@@ -173,6 +149,7 @@ function GroupBlock({
   const complete = isGroupComplete(matches, group.id);
   const showTieBreak = standingsNeededTieBreak(ranked);
   const label = `GRUPO ${String(group.index).padStart(2, "0")}`;
+  const stageLabel = groupPhaseLabel(group);
 
   return (
     <section data-testid="group-block" data-complete={complete ? "yes" : "no"}>
@@ -184,6 +161,11 @@ function GroupBlock({
           </button>
         )}
       </div>
+      {showRefereeOrderNotice && (
+        <div className="mb-3">
+          <RefereeOrderNotice />
+        </div>
+      )}
       {rulesOpen && (
         <div className="mb-3 space-y-1 rounded-md border border-[hsl(var(--border))] p-3 text-sm" data-testid="tiebreak">
           <p>{groupTieBreakSummary(ranked)}</p>
@@ -204,16 +186,18 @@ function GroupBlock({
         </p>
       ) : null}
       {(!complete || matchesOpen) && (
-        <div data-testid="group-matches">
+        <div className="mt-3" data-testid="group-matches">
           {showRefereeOrderNotice && (
-            <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]" data-testid="referee-order-notice">
-              {REFEREE_ORDER_NOTICE}
-            </p>
+            <div className="mb-2">
+              <RefereeOrderNotice />
+            </div>
           )}
           {groupMatches.map((match) => (
-            <MatchLine
+            <GroupMatchRow
               key={match.id}
               match={match}
+              categoryName={categoryName}
+              stageLabel={stageLabel}
               nameOf={nameOf}
             />
           ))}
@@ -226,13 +210,13 @@ function GroupBlock({
 function ScheduleList({
   matches,
   groups,
-  numbers,
   nameOf,
+  categoryName,
 }: {
   matches: Match[];
   groups: Group[];
-  numbers: Map<string, number>;
   nameOf: (id?: string, placeholder?: string) => string;
+  categoryName: string;
 }) {
   const slots = new Map<string, Match[]>();
   const sorted = [...matches].sort((a, b) => {
@@ -267,14 +251,14 @@ function ScheduleList({
               const columnSize = matches.filter(
                 (item) => item.phase === "KO" && item.round === match.round,
               ).length;
-              const phase =
+              const stageLabel =
                 match.phase === "GROUP" ? groupPhaseLabel(group) : knockoutRoundTitle(columnSize);
               return (
-                <MatchLine
+                <GroupMatchRow
                   key={match.id}
                   match={match}
-                  number={match.phase === "KO" ? (numbers.get(match.id) ?? match.position) : undefined}
-                  phase={phase}
+                  categoryName={categoryName}
+                  stageLabel={stageLabel}
                   nameOf={nameOf}
                 />
               );

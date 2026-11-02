@@ -214,6 +214,7 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         bracketSeeding: args.format === "GROUP_KO" ? bracketSeeding : undefined,
         status: "open",
         published: false,
+        showRefereeOrderNotice: args.format === "GROUP_KO" ? true : undefined,
         createdAt: new Date().toISOString(),
       };
       store = { ...store, categories: [...store.categories, c] };

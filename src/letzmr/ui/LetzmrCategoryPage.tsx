@@ -13,13 +13,17 @@ import type {
   ScheduleConflict,
 } from "../domain/types";
 import {
+  formatAvg,
+  formatScheduleWhen,
   matchNumberIndex,
   matchStatusLabel,
   REFEREE_ORDER_NOTICE,
+  shouldShowRefereeOrderNotice,
 } from "../domain/publicDraw";
 import { GroupScheduleForm } from "./GroupScheduleForm";
 import { CategorySetupPanel } from "./CategorySetupPanel";
 import { OrganizerBracket } from "./OrganizerBracket";
+import { PublicGroupTable } from "./PublicGroupTable";
 import { useLetzmr } from "./useLetzmr";
 
 /** ISO (UTC) -> valor local para <input type="datetime-local"> (sem deslocar o fuso). */
@@ -128,19 +132,17 @@ export function LetzmrCategoryPage() {
         <div>
           <p className="font-medium">
             {m.placeholderA || nameOf(m.sideAId)}{" "}
-            <span className="text-[hsl(var(--muted-foreground))]">vs</span>{" "}
+            <span className="text-[hsl(var(--muted-foreground))]">X</span>{" "}
             {m.placeholderB || nameOf(m.sideBId)}
           </p>
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            {matchStatusLabel(m.status)}
+            {formatScheduleWhen(m.scheduledAt)}
+            {m.court ? ` · ${m.court}` : ""}
+            {` · ${matchStatusLabel(m.status)}`}
             {m.winnerRegistrationId
               ? ` · vencedor: ${nameOf(m.winnerRegistrationId)}`
               : ""}
             {m.score?.woSide ? " · W.O." : ""}
-            {m.scheduledAt
-              ? ` · ${new Date(m.scheduledAt).toLocaleString()}`
-              : ""}
-            {m.court ? ` · ${m.court}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -729,7 +731,7 @@ export function LetzmrCategoryPage() {
                 <li key={gid}>
                   {group?.label}: {first ? nameOf(first.registrationId) : "—"}
                   {first
-                    ? ` · ${first.wins}V ${first.losses}D · sets ${first.setDiff >= 0 ? "+" : ""}${first.setDiff} · games ${first.gameDiff >= 0 ? "+" : ""}${first.gameDiff}`
+                    ? ` · ${first.wins}V ${first.losses}D · games ${first.gameDiff >= 0 ? "+" : ""}${first.gameDiff} · AVG ${formatAvg(first.gamePct)}`
                     : ""}
                 </li>
               );
@@ -824,7 +826,39 @@ export function LetzmrCategoryPage() {
 
       {standings.length > 0 && (
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Classificação</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Classificação</h2>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={shouldShowRefereeOrderNotice(cat.showRefereeOrderNotice)}
+                data-testid="referee-order-notice"
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  void run((engine) => engine.setRefereeOrderNotice(cat.id, enabled))
+                    .then(async () => {
+                      if (cat.published) {
+                        await publishCategory(cat.id, true);
+                      }
+                      setMsg(
+                        enabled
+                          ? cat.published
+                            ? "Aviso da ordem habilitado nos grupos. Página pública atualizada."
+                            : "Aviso da ordem habilitado nos grupos."
+                          : cat.published
+                            ? "Aviso da ordem desligado. Página pública atualizada."
+                            : "Aviso da ordem desligado.",
+                      );
+                      setWarn("");
+                    })
+                    .catch((err) =>
+                      setWarn(err instanceof Error ? err.message : "Erro"),
+                    );
+                }}
+              />
+              Mostrar aviso nos grupos: ordem definida no dia pelo árbitro
+            </label>
+          </div>
           {standings.map(({ group, ranked, residualPending }) => {
             // Sem nenhum resultado lançado todos estão empatados em 0: não é empate de verdade.
             const hasResults = groupMatches.some(
@@ -863,45 +897,15 @@ export function LetzmrCategoryPage() {
                     </div>
                   )}
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
-                        <th className="py-1 pr-2">#</th>
-                        <th className="py-1 pr-2">Inscrito</th>
-                        <th className="py-1 pr-2">V-D</th>
-                        <th className="py-1 pr-2">Sets</th>
-                        <th className="py-1 pr-2">Games</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ranked.map((r) => (
-                        <tr
-                          key={r.registrationId}
-                          className="border-b border-[hsl(var(--border))]/60"
-                        >
-                          <td className="py-1 pr-2">{r.rank}</td>
-                          <td className="py-1 pr-2">
-                            {nameOf(r.registrationId)}
-                          </td>
-                          <td className="py-1 pr-2">
-                            {r.wins}-{r.losses}
-                          </td>
-                          <td className="py-1 pr-2">
-                            {r.setsFor}/{r.setsAgainst} (
-                            {r.setDiff >= 0 ? "+" : ""}
-                            {r.setDiff})
-                          </td>
-                          <td className="py-1 pr-2">
-                            {r.gamesFor}/{r.gamesAgainst} (
-                            {r.gameDiff >= 0 ? "+" : ""}
-                            {r.gameDiff})
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {shouldShowRefereeOrderNotice(cat.showRefereeOrderNotice) && (
+                  <p
+                    className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-3 py-2 text-sm"
+                    data-testid="referee-order-notice-text"
+                  >
+                    {REFEREE_ORDER_NOTICE}
+                  </p>
+                )}
+                <PublicGroupTable rows={ranked} nameOf={nameOf} />
               </div>
             );
           })}
@@ -910,32 +914,7 @@ export function LetzmrCategoryPage() {
 
       {groupMatches.length > 0 && (
         <section className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Jogos de grupo</h2>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={Boolean(cat.showRefereeOrderNotice)}
-                data-testid="referee-order-notice"
-                onChange={(e) => {
-                  const enabled = e.target.checked;
-                  void run((engine) => engine.setRefereeOrderNotice(cat.id, enabled))
-                    .then(() => {
-                      setMsg(
-                        enabled
-                          ? "Aviso da ordem habilitado nos grupos."
-                          : "Aviso da ordem desligado.",
-                      );
-                      setWarn("");
-                    })
-                    .catch((err) =>
-                      setWarn(err instanceof Error ? err.message : "Erro"),
-                    );
-                }}
-              />
-              Mostrar aviso nos grupos: ordem definida no dia pelo árbitro
-            </label>
-          </div>
+          <h2 className="text-lg font-semibold">Jogos de grupo</h2>
           <div className="space-y-6">
             {[...groups]
               .sort((a, b) => a.index - b.index)
@@ -947,10 +926,9 @@ export function LetzmrCategoryPage() {
                 return (
                   <div key={g.id} className="space-y-2">
                     <h3 className="font-medium">{g.label}</h3>
-                    {cat.showRefereeOrderNotice && (
+                    {shouldShowRefereeOrderNotice(cat.showRefereeOrderNotice) && (
                       <p
-                        className="text-sm text-[hsl(var(--muted-foreground))]"
-                        data-testid="referee-order-notice-text"
+                        className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-3 py-2 text-sm"
                       >
                         {REFEREE_ORDER_NOTICE}
                       </p>

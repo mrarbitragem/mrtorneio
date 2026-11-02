@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   describeMatchResult,
+  formatAvg,
   formatSetScore,
   isGroupComplete,
   matchStatusLabel,
   REFEREE_ORDER_NOTICE,
+  shouldShowRefereeOrderNotice,
   standingsNeededTieBreak,
 } from "./publicDraw";
 import type { Match, StandingRow } from "./types";
@@ -26,6 +28,12 @@ describe("aviso de ordem no grupo", () => {
     expect(REFEREE_ORDER_NOTICE).toMatch(/árbitro/);
     expect(matchStatusLabel("pending")).toBe("Pendente");
     expect(matchStatusLabel("scheduled")).toBe("Programado");
+  });
+
+  it("aparece mesmo em categoria antiga, sem a opção gravada", () => {
+    expect(shouldShowRefereeOrderNotice(undefined)).toBe(true);
+    expect(shouldShowRefereeOrderNotice(true)).toBe(true);
+    expect(shouldShowRefereeOrderNotice(false)).toBe(false);
   });
 });
 
@@ -55,6 +63,14 @@ describe("desempate só quando o saldo de vitórias empata", () => {
       { wins: 1, losses: 1 },
     ] as Pick<StandingRow, "wins" | "losses">[];
     expect(standingsNeededTieBreak(rows)).toBe(true);
+  });
+});
+
+describe("AVG de games", () => {
+  it("é o aproveitamento de games vencidos nos jogados", () => {
+    expect(formatAvg(null)).toBe("—");
+    expect(formatAvg((6 / 8) * 100)).toBe("75%");
+    expect(formatAvg((10 / 19) * 100)).toBe("52,6%");
   });
 });
 
