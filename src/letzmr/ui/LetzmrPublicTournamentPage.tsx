@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { supabase } from "@/data/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -21,6 +21,7 @@ type AgendaItem = {
   court: string;
   categoryId: string;
   categoryName: string;
+  categorySlug: string;
   phase: string;
   left: string;
   right: string;
@@ -43,6 +44,7 @@ function buildAgenda(snaps: PublicCategorySnapshot[]): AgendaItem[] {
         court: m.court ?? "",
         categoryId: snap.categoryId,
         categoryName: snap.categoryName,
+        categorySlug: snap.categorySlug,
         phase: m.phase === "GROUP" ? groupPhaseLabel(group) : knockoutRoundTitle(koSize),
         left: m.sideAId ? eng.regName(m.sideAId) : (m.placeholderA ?? "A definir"),
         right: m.sideBId ? eng.regName(m.sideBId) : (m.placeholderB ?? "A definir"),
@@ -60,7 +62,7 @@ function buildAgenda(snaps: PublicCategorySnapshot[]): AgendaItem[] {
 
 /** Página pública do torneio: categorias publicadas e agenda geral. Sem login. */
 export function LetzmrPublicTournamentPage() {
-  const { tournamentId } = useParams();
+  const { tournamentId, tournamentSlug } = useParams();
   const [snaps, setSnaps] = useState<PublicCategorySnapshot[] | null>(null);
   const [error, setError] = useState("");
 
@@ -71,10 +73,13 @@ export function LetzmrPublicTournamentPage() {
         if (!supabase || !isLetzmrLiveConfigured()) {
           throw new Error("Consulta indisponível no momento.");
         }
-        const list = await createSupabasePersistence({
+        const persist = createSupabasePersistence({
           client: supabase,
           getUserId: () => null,
-        }).loadPublicTournament(tournamentId!);
+        });
+        const list = tournamentId
+          ? await persist.loadPublicTournament(tournamentId)
+          : await persist.loadPublicTournamentBySlug(tournamentSlug!);
         if (cancelled) return;
         setSnaps(list);
         setError("");
@@ -83,13 +88,12 @@ export function LetzmrPublicTournamentPage() {
       }
     }
     void load();
-    // Atualiza sozinho para quem deixa a página aberta durante o torneio.
     const timer = window.setInterval(() => void load(), REFRESH_MS);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [tournamentId]);
+  }, [tournamentId, tournamentSlug]);
 
   const agenda = useMemo(() => (snaps ? buildAgenda(snaps) : []), [snaps]);
 
@@ -108,6 +112,10 @@ export function LetzmrPublicTournamentPage() {
   }
 
   const tournamentName = snaps[0].tournamentName;
+  const tournamentSlugNow = snaps[0].tournamentSlug;
+  if (tournamentId && tournamentSlugNow) {
+    return <Navigate to={`/${tournamentSlugNow}`} replace />;
+  }
   const agendaSlots = new Map<string, AgendaItem[]>();
   for (const item of agenda) {
     const key = `${formatScheduleWhen(item.scheduledAt)}||${item.court}`;
@@ -134,7 +142,7 @@ export function LetzmrPublicTournamentPage() {
             {snaps.map((s) => (
               <li key={s.categoryId}>
                 <Link
-                  to={`/public/${s.tournamentId}/${s.categoryId}`}
+                  to={`/${s.tournamentSlug}/${s.categorySlug}`}
                   className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-[hsl(var(--muted))]"
                   data-testid="public-category-link"
                 >
@@ -176,7 +184,7 @@ export function LetzmrPublicTournamentPage() {
                     >
                       <p className="text-xs text-[hsl(var(--muted-foreground))]">
                         <Link
-                          to={`/public/${tournamentId}/${it.categoryId}`}
+                          to={`/${tournamentSlugNow}/${it.categorySlug}`}
                           className="underline"
                         >
                           {it.categoryName}

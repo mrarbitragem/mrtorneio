@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { slugsFor } from "../domain/slug";
 import type { LetzmrStore } from "../domain/types";
 import { emptyStore } from "../store/localStore";
 import type {
@@ -69,15 +70,61 @@ function buildCategorySnapshot(store: LetzmrStore, categoryId: string): LetzmrSt
   };
 }
 
-function toPublicSnapshot(data: Record<string, unknown>): PublicCategorySnapshot {
+function toPublicSnapshot(
+  data: Record<string, unknown>,
+  tournamentSlug: string,
+  categorySlug: string,
+): PublicCategorySnapshot {
   return {
     categoryId: data.category_id as string,
     tournamentId: data.tournament_id as string,
     tournamentName: data.tournament_name as string,
     categoryName: data.category_name as string,
+    tournamentSlug,
+    categorySlug,
     snapshot: data.snapshot as LetzmrStore,
     publishedAt: data.published_at as string,
   };
+}
+
+function decoratePublicRows(rows: Record<string, unknown>[]): PublicCategorySnapshot[] {
+  const tournamentSlugs = slugsFor(
+    uniqueNamed(
+      rows.map((row) => ({
+        id: row.tournament_id as string,
+        name: row.tournament_name as string,
+      })),
+    ),
+  );
+  const byTournament = new Map<string, { id: string; name: string }[]>();
+  for (const row of rows) {
+    const tid = row.tournament_id as string;
+    const list = byTournament.get(tid) ?? [];
+    list.push({ id: row.category_id as string, name: row.category_name as string });
+    byTournament.set(tid, list);
+  }
+  const categorySlugs = new Map<string, string>();
+  for (const cats of byTournament.values()) {
+    for (const [id, slug] of slugsFor(uniqueNamed(cats))) {
+      categorySlugs.set(id, slug);
+    }
+  }
+  return rows.map((row) =>
+    toPublicSnapshot(
+      row,
+      tournamentSlugs.get(row.tournament_id as string) ?? "torneio",
+      categorySlugs.get(row.category_id as string) ?? "categoria",
+    ),
+  );
+}
+
+function uniqueNamed(items: { id: string; name: string }[]): { id: string; name: string }[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 }
 
 export function createSupabasePersistence(args: {
@@ -97,6 +144,15 @@ export function createSupabasePersistence(args: {
     }
     return uid;
   };
+
+  async function fetchAllPublic(): Promise<Record<string, unknown>[]> {
+    const { data, error } = await client
+      .from("letzmr_public_categories")
+      .select("*")
+      .order("category_name", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data ?? []) as Record<string, unknown>[];
+  }
 
   return {
     async load() {
@@ -232,7 +288,19 @@ export function createSupabasePersistence(args: {
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) return null;
-      return toPublicSnapshot(data);
+      return decoratePublicRows([data as Record<string, unknown>])[0] ?? null;
+    },
+
+    async loadPublicCategoryBySlug(
+      tournamentSlug: string,
+      categorySlug: string,
+    ): Promise<PublicCategorySnapshot | null> {
+      const rows = await fetchAllPublic();
+      return (
+        decoratePublicRows(rows).find(
+          (row) => row.tournamentSlug === tournamentSlug && row.categorySlug === categorySlug,
+        ) ?? null
+      );
     },
 
     async listPublicTournaments(): Promise<PublicTournamentSummary[]> {
@@ -241,22 +309,23 @@ export function createSupabasePersistence(args: {
         .select("category_id,tournament_id,tournament_name,category_name,published_at")
         .order("published_at", { ascending: false });
       if (error) throw new Error(error.message);
+      const decorated = decoratePublicRows((data ?? []) as Record<string, unknown>[]);
       const byTournament = new Map<string, PublicTournamentSummary>();
-      for (const row of data ?? []) {
-        const id = row.tournament_id as string;
-        const publishedAt = row.published_at as string;
-        const current = byTournament.get(id) ?? {
-          tournamentId: id,
-          tournamentName: row.tournament_name as string,
+      for (const row of decorated) {
+        const current = byTournament.get(row.tournamentId) ?? {
+          tournamentId: row.tournamentId,
+          tournamentName: row.tournamentName,
+          tournamentSlug: row.tournamentSlug,
           categories: [],
-          updatedAt: publishedAt,
+          updatedAt: row.publishedAt,
         };
         current.categories.push({
-          categoryId: row.category_id as string,
-          categoryName: row.category_name as string,
+          categoryId: row.categoryId,
+          categoryName: row.categoryName,
+          categorySlug: row.categorySlug,
         });
-        if (publishedAt > current.updatedAt) current.updatedAt = publishedAt;
-        byTournament.set(id, current);
+        if (row.publishedAt > current.updatedAt) current.updatedAt = row.publishedAt;
+        byTournament.set(row.tournamentId, current);
       }
       return [...byTournament.values()]
         .map((t) => ({
@@ -273,7 +342,15 @@ export function createSupabasePersistence(args: {
         .eq("tournament_id", tournamentId)
         .order("category_name", { ascending: true });
       if (error) throw new Error(error.message);
-      return (data ?? []).map(toPublicSnapshot);
+      return decoratePublicRows((data ?? []) as Record<string, unknown>[]);
+    },
+
+    async loadPublicTournamentBySlug(tournamentSlug: string): Promise<PublicCategorySnapshot[]> {
+      const rows = await fetchAllPublic();
+      const decorated = decoratePublicRows(rows);
+      const match = decorated.find((row) => row.tournamentSlug === tournamentSlug);
+      if (!match) return [];
+      return decorated.filter((row) => row.tournamentId === match.tournamentId);
     },
   };
 }

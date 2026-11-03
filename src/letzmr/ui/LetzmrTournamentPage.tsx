@@ -11,18 +11,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BRACKET_SEEDING_LABEL, availableBracketSeedings } from "../domain/bracket";
+import { publicCategoryPath, publicTournamentPath } from "../domain/slug";
 import type { BracketSeeding, CategoryFormat } from "../domain/types";
 import { useLetzmr } from "./useLetzmr";
 
 function PublicLinkBox({
-  tournamentId,
+  href,
   publishedCount,
 }: {
-  tournamentId: string;
+  href: string;
   publishedCount: number;
 }) {
   const [copied, setCopied] = useState(false);
-  const url = `${window.location.origin}/public/${tournamentId}`;
+  const url = `${window.location.origin}${href}`;
   return (
     <section
       className="space-y-2 rounded-lg border border-[hsl(var(--border))] p-4"
@@ -51,7 +52,7 @@ function PublicLinkBox({
           {copied ? "Copiado!" : "Copiar link"}
         </Button>
         <Button asChild size="sm" variant="outline">
-          <Link to={`/public/${tournamentId}`}>Abrir</Link>
+          <Link to={href}>Abrir</Link>
         </Button>
       </div>
     </section>
@@ -100,7 +101,13 @@ export function LetzmrTournamentPage() {
         <h1 className="mt-2 text-2xl font-bold">{t.name}</h1>
       </div>
 
-      <PublicLinkBox tournamentId={t.id} publishedCount={cats.filter((c) => c.published).length} />
+      <PublicLinkBox
+        href={publicTournamentPath(
+          { id: t.id, name: t.name },
+          store.tournaments.map((item) => ({ id: item.id, name: item.name })),
+        )}
+        publishedCount={cats.filter((c) => c.published).length}
+      />
 
       <section className="space-y-3 rounded-lg border border-[hsl(var(--border))] p-4">
         <h2 className="text-lg font-semibold">Nova categoria</h2>
@@ -259,7 +266,16 @@ export function LetzmrTournamentPage() {
                   )}
                   {c.published && (
                     <Button asChild size="sm" variant="outline">
-                      <Link to={`/public/${t.id}/${c.id}`}>Público</Link>
+                      <Link
+                        to={publicCategoryPath(
+                          { id: t.id, name: t.name },
+                          { id: c.id, name: c.name },
+                          store.tournaments.map((item) => ({ id: item.id, name: item.name })),
+                          cats.map((item) => ({ id: item.id, name: item.name })),
+                        )}
+                      >
+                        Público
+                      </Link>
                     </Button>
                   )}
                   <Button asChild size="sm">

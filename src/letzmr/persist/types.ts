@@ -9,6 +9,8 @@ export type PublicCategorySnapshot = {
   tournamentId: string;
   tournamentName: string;
   categoryName: string;
+  tournamentSlug: string;
+  categorySlug: string;
   snapshot: LetzmrStore;
   publishedAt: string;
 };
@@ -17,7 +19,8 @@ export type PublicCategorySnapshot = {
 export type PublicTournamentSummary = {
   tournamentId: string;
   tournamentName: string;
-  categories: { categoryId: string; categoryName: string }[];
+  tournamentSlug: string;
+  categories: { categoryId: string; categoryName: string; categorySlug: string }[];
   /** Última publicação entre as categorias (ISO). */
   updatedAt: string;
 };
@@ -28,8 +31,13 @@ export interface LetzmrPersistence {
   publishCategory(store: LetzmrStore, categoryId: string): Promise<PersistResult>;
   unpublishCategory(categoryId: string): Promise<PersistResult>;
   loadPublicCategory(categoryId: string): Promise<PublicCategorySnapshot | null>;
+  loadPublicCategoryBySlug(
+    tournamentSlug: string,
+    categorySlug: string,
+  ): Promise<PublicCategorySnapshot | null>;
   /** Torneios que têm ao menos uma categoria publicada (leitura aberta, sem login). */
   listPublicTournaments(): Promise<PublicTournamentSummary[]>;
   /** Todas as categorias publicadas de um torneio (leitura aberta, sem login). */
   loadPublicTournament(tournamentId: string): Promise<PublicCategorySnapshot[]>;
+  loadPublicTournamentBySlug(tournamentSlug: string): Promise<PublicCategorySnapshot[]>;
 }

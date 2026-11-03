@@ -3,15 +3,15 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useLetzmr } from "./useLetzmr";
 
-/** Páginas abertas a qualquer pessoa: a inicial e a consulta pública. */
-function isPublicPath(pathname: string) {
-  return pathname === "/" || pathname.startsWith("/public");
+/** Painel e operação exigem login; o restante da consulta é público. */
+function isOrganizerPath(pathname: string) {
+  return pathname === "/painel" || pathname.startsWith("/painel/") || pathname.startsWith("/t/");
 }
 
 export function LetzmrShell() {
   const loc = useLocation();
   const navigate = useNavigate();
-  const isPublic = isPublicPath(loc.pathname);
+  const isPublic = !isOrganizerPath(loc.pathname);
   const { user, authLoading } = useLetzmr();
 
   // Área do organizador exige login.

@@ -19,6 +19,8 @@ export function AppRoutes() {
         <Route path="t/:tournamentId/c/:categoryId" element={<LetzmrCategoryPage />} />
         <Route path="public/:tournamentId" element={<LetzmrPublicTournamentPage />} />
         <Route path="public/:tournamentId/:categoryId" element={<LetzmrPublicPage />} />
+        <Route path=":tournamentSlug" element={<LetzmrPublicTournamentPage />} />
+        <Route path=":tournamentSlug/:categorySlug" element={<LetzmrPublicPage />} />
       </Route>
       {/* Rotas legadas */}
       <Route path="/letzmr/*" element={<Navigate to="/" replace />} />

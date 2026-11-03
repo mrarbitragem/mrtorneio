@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { supabase } from "@/data/client";
 import type { LetzmrStore } from "../domain/types";
 import { isLetzmrLiveConfigured } from "../persist/config";
@@ -8,11 +8,15 @@ import { PublicCategoryView } from "./PublicCategoryView";
 
 /** Consulta pública somente leitura: abre sem login e só mostra categorias publicadas. */
 export function LetzmrPublicPage() {
-  const { tournamentId, categoryId } = useParams();
+  const { tournamentId, categoryId, tournamentSlug, categorySlug } = useParams();
   const [remote, setRemote] = useState<LetzmrStore | null>(null);
-  const [meta, setMeta] = useState<{ tournamentName: string; categoryName: string } | null>(
-    null,
-  );
+  const [meta, setMeta] = useState<{
+    tournamentName: string;
+    categoryName: string;
+    tournamentSlug: string;
+    categorySlug: string;
+    categoryId: string;
+  } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -27,14 +31,23 @@ export function LetzmrPublicPage() {
         if (!supabase || !isLetzmrLiveConfigured()) {
           throw new Error("Consulta indisponível no momento.");
         }
-        const pub = await createSupabasePersistence({
+        const persist = createSupabasePersistence({
           client: supabase,
           getUserId: () => null,
-        }).loadPublicCategory(categoryId!);
+        });
+        const pub = categoryId
+          ? await persist.loadPublicCategory(categoryId)
+          : await persist.loadPublicCategoryBySlug(tournamentSlug!, categorySlug!);
         if (cancelled) return;
         if (pub) {
           setRemote(pub.snapshot);
-          setMeta({ tournamentName: pub.tournamentName, categoryName: pub.categoryName });
+          setMeta({
+            tournamentName: pub.tournamentName,
+            categoryName: pub.categoryName,
+            tournamentSlug: pub.tournamentSlug,
+            categorySlug: pub.categorySlug,
+            categoryId: pub.categoryId,
+          });
         } else {
           setRemote(null);
           setMeta(null);
@@ -48,13 +61,12 @@ export function LetzmrPublicPage() {
       }
     }
     void load(false);
-    // Atualiza sozinho para quem deixa a página aberta durante o torneio.
     const timer = window.setInterval(() => void load(true), 30_000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [categoryId]);
+  }, [categoryId, tournamentSlug, categorySlug]);
 
   if (loading) return <p className="text-sm">Carregando…</p>;
   if (error) return <p className="text-sm text-[hsl(var(--destructive))]">{error}</p>;
@@ -71,17 +83,22 @@ export function LetzmrPublicPage() {
     );
   }
 
+  const friendly = `/${meta.tournamentSlug}/${meta.categorySlug}`;
+  if (categoryId && tournamentId) {
+    return <Navigate to={friendly} replace />;
+  }
+
   return (
     <div className="space-y-4">
       <Link
-        to={`/public/${tournamentId}`}
+        to={`/${meta.tournamentSlug}`}
         className="text-sm text-[hsl(var(--muted-foreground))] hover:underline"
       >
         ← Todas as categorias do torneio
       </Link>
       <PublicCategoryView
         store={remote}
-        categoryId={categoryId!}
+        categoryId={meta.categoryId}
         tournamentName={meta.tournamentName}
         categoryName={meta.categoryName}
       />

@@ -67,7 +67,7 @@ export function LetzmrPublicHomePage() {
             >
               <div>
                 <Link
-                  to={`/public/${t.tournamentId}`}
+                  to={`/${t.tournamentSlug}`}
                   className="text-lg font-semibold text-[hsl(var(--primary))] hover:underline"
                   data-testid="public-tournament-link"
                 >
@@ -88,7 +88,7 @@ export function LetzmrPublicHomePage() {
                 {t.categories.map((c) => (
                   <Link
                     key={c.categoryId}
-                    to={`/public/${t.tournamentId}/${c.categoryId}`}
+                    to={`/${t.tournamentSlug}/${c.categorySlug}`}
                     className="rounded-full border border-[hsl(var(--border))] px-3 py-1 text-xs hover:bg-[hsl(var(--muted))]"
                   >
                     {c.categoryName}

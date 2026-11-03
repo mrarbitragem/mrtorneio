@@ -20,6 +20,7 @@ import {
   REFEREE_ORDER_NOTICE,
   shouldShowRefereeOrderNotice,
 } from "../domain/publicDraw";
+import { publicCategoryPath } from "../domain/slug";
 import { GroupScheduleForm } from "./GroupScheduleForm";
 import { CategorySetupPanel } from "./CategorySetupPanel";
 import { OrganizerBracket } from "./OrganizerBracket";
@@ -108,6 +109,14 @@ export function LetzmrCategoryPage() {
   const nameOf = (id?: string) => eng.regName(id);
   const singleGroup = cat.format === "GROUP_KO" && cat.numGroups === 1;
   const hasKnockout = cat.format === "KO" || cat.advancersPerGroup > 0;
+  const publicHref = publicCategoryPath(
+    { id: tournament.id, name: tournament.name },
+    { id: cat.id, name: cat.name },
+    store.tournaments.map((item) => ({ id: item.id, name: item.name })),
+    store.categories
+      .filter((item) => item.tournamentId === tournament.id)
+      .map((item) => ({ id: item.id, name: item.name })),
+  );
 
   const renderMatchRow = (m: Match) => {
     const draft = scoreDraft[m.id] ?? { a: "", b: "" };
@@ -421,7 +430,7 @@ export function LetzmrCategoryPage() {
           </span>
           <span className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="outline">
-              <Link to={`/public/${tournamentId}/${categoryId}`}>
+              <Link to={publicHref}>
                 Ver página pública
               </Link>
             </Button>
@@ -738,7 +747,7 @@ export function LetzmrCategoryPage() {
         </Button>
         {cat.published && (
           <Button asChild variant="link">
-            <Link to={`/public/${tournamentId}/${categoryId}`}>
+            <Link to={publicHref}>
               Ver consulta pública
             </Link>
           </Button>
