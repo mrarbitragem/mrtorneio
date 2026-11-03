@@ -24,6 +24,7 @@ import { GroupScheduleForm } from "./GroupScheduleForm";
 import { CategorySetupPanel } from "./CategorySetupPanel";
 import { OrganizerBracket } from "./OrganizerBracket";
 import { PublicGroupTable } from "./PublicGroupTable";
+import { RegistrationEditor } from "./RegistrationEditor";
 import { useLetzmr } from "./useLetzmr";
 
 /** ISO (UTC) -> valor local para <input type="datetime-local"> (sem deslocar o fuso). */
@@ -594,37 +595,73 @@ export function LetzmrCategoryPage() {
           </Button>
         </div>
 
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+          Parceiro ou dupla errada: edite o nome. Para encaixar horário, troque com uma dupla de
+          outro grupo — só enquanto não houver placar.
+        </p>
         <ul className="text-sm">
           {regs.map((r) => (
-            <li key={r.id} className="flex items-center gap-2 py-0.5">
-              <span>
-                {r.displayName}
-                {r.groupId
-                  ? ` · ${groups.find((g) => g.id === r.groupId)?.label ?? r.groupId}`
-                  : ""}
-              </span>
-              {groups.length === 0 && matches.length === 0 && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-2 text-xs text-[hsl(var(--destructive))]"
-                  data-testid="remove-registration"
-                  onClick={() => {
-                    void run((e) => e.removeRegistration(r.id))
-                      .then(() => {
-                        setMsg("Inscrição removida.");
-                        setWarn("");
-                      })
-                      .catch((err) =>
-                        setWarn(err instanceof Error ? err.message : "Erro"),
-                      );
-                  }}
-                >
-                  Remover
-                </Button>
-              )}
-            </li>
+            <RegistrationEditor
+              key={r.id}
+              reg={r}
+              cat={cat}
+              groups={groups}
+              athletes={store.athletes}
+              allRegs={regs}
+              canRemove={groups.length === 0 && matches.length === 0}
+              onRename={async (names) => {
+                try {
+                  await run((e) => e.renameRegistration(r.id, names));
+                  if (cat.published) await publishCategory(cat.id, true);
+                  setMsg(
+                    cat.published
+                      ? "Nome da dupla atualizado. Página pública atualizada."
+                      : "Nome da dupla atualizado.",
+                  );
+                  setWarn("");
+                } catch (err) {
+                  setWarn(err instanceof Error ? err.message : "Erro");
+                  throw err;
+                }
+              }}
+              onSwap={async (otherId) => {
+                try {
+                  await run((e) => e.swapGroupRegistrations(r.id, otherId));
+                  if (cat.published) await publishCategory(cat.id, true);
+                  setMsg(
+                    cat.published
+                      ? "Duplas trocadas de grupo. Página pública atualizada."
+                      : "Duplas trocadas de grupo.",
+                  );
+                  setWarn("");
+                } catch (err) {
+                  setWarn(err instanceof Error ? err.message : "Erro");
+                }
+              }}
+              onMove={async (groupId) => {
+                try {
+                  await run((e) => e.moveRegistrationToGroup(r.id, groupId));
+                  if (cat.published) await publishCategory(cat.id, true);
+                  setMsg(
+                    cat.published
+                      ? "Dupla movida de grupo. Página pública atualizada."
+                      : "Dupla movida de grupo.",
+                  );
+                  setWarn("");
+                } catch (err) {
+                  setWarn(err instanceof Error ? err.message : "Erro");
+                }
+              }}
+              onRemove={async () => {
+                try {
+                  await run((e) => e.removeRegistration(r.id));
+                  setMsg("Inscrição removida.");
+                  setWarn("");
+                } catch (err) {
+                  setWarn(err instanceof Error ? err.message : "Erro");
+                }
+              }}
+            />
           ))}
         </ul>
       </section>

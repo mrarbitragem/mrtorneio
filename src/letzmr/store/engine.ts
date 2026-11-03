@@ -117,6 +117,64 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
   const isOpenMatch = (m: Match) =>
     m.status !== "played" && m.status !== "wo" && m.status !== "bye";
 
+  const groupHasRecordedResult = (groupId: string) =>
+    store.matches.some(
+      (m) =>
+        m.phase === "GROUP" &&
+        m.groupId === groupId &&
+        (m.status === "played" || m.status === "wo"),
+    );
+
+  const inMaterializedKo = (registrationId: string) =>
+    store.matches.some(
+      (m) =>
+        m.phase === "KO" &&
+        (m.sideAId === registrationId ||
+          m.sideBId === registrationId ||
+          m.winnerRegistrationId === registrationId),
+    );
+
+  const assertGroupsEditable = (groupIds: string[], registrationIds: string[]) => {
+    if (groupIds.some((id) => groupHasRecordedResult(id))) {
+      throw new Error(
+        "Já há resultado nesses grupos. Cancele o placar antes de trocar as duplas.",
+      );
+    }
+    if (registrationIds.some((id) => inMaterializedKo(id))) {
+      throw new Error(
+        "A chave eliminatória já tem essas duplas. Ajuste os grupos antes de materializar a chave.",
+      );
+    }
+  };
+
+  const rebuildGroupMatches = (
+    s: LetzmrStore,
+    categoryId: string,
+    groupId: string,
+  ): LetzmrStore => {
+    const previous = s.matches.filter((m) => m.phase === "GROUP" && m.groupId === groupId);
+    const stamp = previous.find((m) => m.scheduledAt) ?? previous[0];
+    const ids = s.registrations
+      .filter((r) => r.groupId === groupId && r.status === "confirmed")
+      .map((r) => r.id);
+    const built = buildRoundRobinMatches(categoryId, groupId, ids).map((m) => {
+      if (!stamp?.scheduledAt && !stamp?.court) return m;
+      return {
+        ...m,
+        scheduledAt: stamp.scheduledAt,
+        court: stamp.court,
+        status: stamp.scheduledAt ? ("scheduled" as const) : m.status,
+      };
+    });
+    return {
+      ...s,
+      matches: [
+        ...s.matches.filter((m) => !(m.phase === "GROUP" && m.groupId === groupId)),
+        ...built,
+      ],
+    };
+  };
+
   const applyBatchSchedule = (
     open: Match[],
     opts: ScheduleBatchOptions,
@@ -304,6 +362,115 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
         registrations: remaining,
         athletes: store.athletes.filter((a) => used.has(a.id) || !reg.athleteIds.includes(a.id)),
       };
+    },
+
+    /** Troca os atletas da inscrição. Vale depois do sorteio: os jogos continuam os mesmos. */
+    renameRegistration: (registrationId: string, names: string[]): Registration => {
+      const reg = store.registrations.find((r) => r.id === registrationId);
+      if (!reg) throw new Error("Inscrição não encontrada");
+      const cat = store.categories.find((c) => c.id === reg.categoryId);
+      if (!cat) throw new Error("Categoria não encontrada");
+      if (cat.entryType === "doubles" && names.length !== 2) {
+        throw new Error("Dupla exige 2 atletas");
+      }
+      if (cat.entryType === "singles" && names.length !== 1) {
+        throw new Error("Simples exige 1 atleta");
+      }
+      if (names.some((n) => !cleanName(n))) {
+        throw new Error(
+          cat.entryType === "doubles"
+            ? "Informe o nome dos 2 atletas da dupla."
+            : "Informe o nome do atleta.",
+        );
+      }
+      const previousAthletes = reg.athleteIds;
+      const athletes = names.map((n) => api.ensureAthlete(cleanName(n)));
+      const updated: Registration = {
+        ...reg,
+        athleteIds: athletes.map((a) => a.id),
+        displayName: athletes.map((a) => a.displayName).join(" / "),
+      };
+      store = {
+        ...store,
+        registrations: store.registrations.map((r) => (r.id === reg.id ? updated : r)),
+      };
+      store = pruneAthletes(store, previousAthletes);
+      return updated;
+    },
+
+    /**
+     * Troca duas duplas de grupo, mantendo os horários e os confrontos do grupo.
+     * Só com os jogos ainda sem placar.
+     */
+    swapGroupRegistrations: (registrationIdA: string, registrationIdB: string) => {
+      if (registrationIdA === registrationIdB) {
+        throw new Error("Escolha duas duplas diferentes.");
+      }
+      const a = store.registrations.find((r) => r.id === registrationIdA);
+      const b = store.registrations.find((r) => r.id === registrationIdB);
+      if (!a || !b) throw new Error("Inscrição não encontrada");
+      if (a.categoryId !== b.categoryId) {
+        throw new Error("As duplas precisam ser da mesma categoria.");
+      }
+      if (!a.groupId || !b.groupId) {
+        throw new Error("Gere os grupos antes de trocar as duplas.");
+      }
+      if (a.groupId === b.groupId) {
+        throw new Error("As duas duplas já estão no mesmo grupo.");
+      }
+      assertGroupsEditable([a.groupId, b.groupId], [a.id, b.id]);
+      const groupA = a.groupId;
+      const groupB = b.groupId;
+      const swapId = (id?: string) => (id === a.id ? b.id : id === b.id ? a.id : id);
+      const touched = [groupA, groupB];
+      store = {
+        ...store,
+        registrations: store.registrations.map((r) => {
+          if (r.id === a.id) return { ...r, groupId: groupB };
+          if (r.id === b.id) return { ...r, groupId: groupA };
+          return r;
+        }),
+        matches: store.matches.map((m) => {
+          if (m.phase !== "GROUP" || !m.groupId || !touched.includes(m.groupId)) return m;
+          return {
+            ...m,
+            sideAId: swapId(m.sideAId),
+            sideBId: swapId(m.sideBId),
+            winnerRegistrationId: swapId(m.winnerRegistrationId),
+          };
+        }),
+      };
+    },
+
+    /**
+     * Move uma dupla para outro grupo e regenera os jogos dos dois grupos.
+     * O horário já marcado no grupo de destino é mantido.
+     */
+    moveRegistrationToGroup: (registrationId: string, targetGroupId: string) => {
+      const reg = store.registrations.find((r) => r.id === registrationId);
+      if (!reg) throw new Error("Inscrição não encontrada");
+      if (!reg.groupId) throw new Error("Gere os grupos antes de mover a dupla.");
+      if (reg.groupId === targetGroupId) return;
+      const target = store.groups.find((g) => g.id === targetGroupId);
+      if (!target || target.categoryId !== reg.categoryId) {
+        throw new Error("Grupo não encontrado");
+      }
+      assertGroupsEditable([reg.groupId, targetGroupId], [reg.id]);
+      const sourceCount = store.registrations.filter((r) => r.groupId === reg.groupId).length;
+      if (sourceCount - 1 < 2) {
+        throw new Error(
+          "O grupo de origem ficaria com uma dupla só. Troque com outra dupla do grupo de destino.",
+        );
+      }
+      const sourceId = reg.groupId;
+      store = {
+        ...store,
+        registrations: store.registrations.map((r) =>
+          r.id === reg.id ? { ...r, groupId: targetGroupId } : r,
+        ),
+      };
+      store = rebuildGroupMatches(store, reg.categoryId, sourceId);
+      store = rebuildGroupMatches(store, reg.categoryId, targetGroupId);
     },
 
     generateDraw: (categoryId: string, rng?: () => number) => {

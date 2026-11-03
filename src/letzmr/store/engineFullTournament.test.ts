@@ -204,6 +204,69 @@ describe("remover inscrição", () => {
   });
 });
 
+describe("editar dupla e trocar de grupo", () => {
+  it("renomeia a dupla depois do sorteio sem mexer nos jogos", () => {
+    const { eng, cat } = build({ numGroups: 1, advancersPerGroup: 0, pairs: 3 });
+    const reg = eng.getStore().registrations.find((r) => r.categoryId === cat.id)!;
+    const matchIds = eng.getStore().matches.map((m) => m.id);
+    eng.renameRegistration(reg.id, ["Guilherme", "Marcos"]);
+    expect(eng.getStore().registrations.find((r) => r.id === reg.id)?.displayName).toBe(
+      "Guilherme / Marcos",
+    );
+    expect(eng.getStore().matches.map((m) => m.id)).toEqual(matchIds);
+    expect(eng.getStore().athletes.some((a) => a.displayName === "Guilherme")).toBe(true);
+  });
+
+  it("troca duas duplas de grupo e mantém o horário", () => {
+    const { eng, cat } = build({ numGroups: 2, advancersPerGroup: 2, pairs: 6 });
+    const groups = eng.getStore().groups.filter((g) => g.categoryId === cat.id);
+    const a = eng.getStore().registrations.find((r) => r.groupId === groups[0].id)!;
+    const b = eng.getStore().registrations.find((r) => r.groupId === groups[1].id)!;
+    const when = "2026-11-04T21:30:00.000Z";
+    for (const m of eng.getStore().matches.filter((m) => m.groupId === groups[0].id)) {
+      eng.scheduleMatch(m.id, when, "Q1");
+    }
+    eng.swapGroupRegistrations(a.id, b.id);
+    const s = eng.getStore();
+    expect(s.registrations.find((r) => r.id === a.id)?.groupId).toBe(groups[1].id);
+    expect(s.registrations.find((r) => r.id === b.id)?.groupId).toBe(groups[0].id);
+    const g1Matches = s.matches.filter((m) => m.groupId === groups[0].id && m.phase === "GROUP");
+    expect(g1Matches.every((m) => m.scheduledAt === when)).toBe(true);
+    expect(g1Matches.some((m) => m.sideAId === b.id || m.sideBId === b.id)).toBe(true);
+    expect(g1Matches.some((m) => m.sideAId === a.id || m.sideBId === a.id)).toBe(false);
+  });
+
+  it("recusa troca quando o grupo já tem placar", () => {
+    const { eng, cat } = build({ numGroups: 2, advancersPerGroup: 2, pairs: 6 });
+    const groups = eng.getStore().groups.filter((g) => g.categoryId === cat.id);
+    const a = eng.getStore().registrations.find((r) => r.groupId === groups[0].id)!;
+    const b = eng.getStore().registrations.find((r) => r.groupId === groups[1].id)!;
+    const match = eng.getStore().matches.find((m) => m.groupId === groups[0].id && m.sideAId && m.sideBId)!;
+    eng.recordScore(match.id, [{ gamesA: 6, gamesB: 3 }]);
+    expect(() => eng.swapGroupRegistrations(a.id, b.id)).toThrow(/resultado/);
+  });
+
+  it("move uma dupla para o outro grupo e regenera os jogos", () => {
+    const { eng, cat } = build({ numGroups: 2, advancersPerGroup: 2, pairs: 7 });
+    const groups = eng
+      .getStore()
+      .groups.filter((g) => g.categoryId === cat.id)
+      .sort((a, b) => a.index - b.index);
+    const from = groups[1];
+    const to = groups[0];
+    const mover = eng.getStore().registrations.find((r) => r.groupId === from.id)!;
+    const beforeFrom = eng.getStore().registrations.filter((r) => r.groupId === from.id).length;
+    const beforeTo = eng.getStore().registrations.filter((r) => r.groupId === to.id).length;
+    eng.moveRegistrationToGroup(mover.id, to.id);
+    const s = eng.getStore();
+    expect(s.registrations.find((r) => r.id === mover.id)?.groupId).toBe(to.id);
+    expect(s.registrations.filter((r) => r.groupId === from.id)).toHaveLength(beforeFrom - 1);
+    expect(s.registrations.filter((r) => r.groupId === to.id)).toHaveLength(beforeTo + 1);
+    const destMatches = s.matches.filter((m) => m.groupId === to.id && m.phase === "GROUP");
+    expect(destMatches).toHaveLength(((beforeTo + 1) * beforeTo) / 2);
+  });
+});
+
 describe("inscrição em lista", () => {
   function doublesCat() {
     const eng = createEngine(emptyStore());
