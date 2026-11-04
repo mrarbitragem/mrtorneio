@@ -1,5 +1,24 @@
 import type { CorrectionImpact, Match, Score, SetScore, StandingRow } from "./types";
 
+/** Campo em branco vale 0, desde que o outro lado esteja preenchido. Empate é inválido. */
+export function parseSingleSetDraft(aRaw: string, bRaw: string): SetScore | null {
+  const a = aRaw.trim();
+  const b = bRaw.trim();
+  if (a === "" && b === "") return null;
+  const gamesA = a === "" ? 0 : Number(a);
+  const gamesB = b === "" ? 0 : Number(b);
+  if (
+    !Number.isInteger(gamesA) ||
+    !Number.isInteger(gamesB) ||
+    gamesA < 0 ||
+    gamesB < 0 ||
+    gamesA === gamesB
+  ) {
+    return null;
+  }
+  return { gamesA, gamesB };
+}
+
 export function winnerFromSets(
   sideAId: string,
   sideBId: string,

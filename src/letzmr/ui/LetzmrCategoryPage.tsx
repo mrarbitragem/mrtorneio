@@ -21,6 +21,8 @@ import {
   shouldShowRefereeOrderNotice,
 } from "../domain/publicDraw";
 import { publicCategoryPath } from "../domain/slug";
+import { parseSingleSetDraft } from "../domain/score";
+import { GroupBatchScoreForm } from "./GroupBatchScoreForm";
 import { GroupScheduleForm } from "./GroupScheduleForm";
 import { CategorySetupPanel } from "./CategorySetupPanel";
 import { OrganizerBracket } from "./OrganizerBracket";
@@ -120,17 +122,8 @@ export function LetzmrCategoryPage() {
 
   const renderMatchRow = (m: Match) => {
     const draft = scoreDraft[m.id] ?? { a: "", b: "" };
-    // Campo em branco vale 0, desde que o outro lado esteja preenchido.
-    const filled = draft.a.trim() !== "" || draft.b.trim() !== "";
-    const gamesA = draft.a.trim() === "" ? 0 : Number(draft.a);
-    const gamesB = draft.b.trim() === "" ? 0 : Number(draft.b);
-    const scoreValid =
-      filled &&
-      Number.isInteger(gamesA) &&
-      Number.isInteger(gamesB) &&
-      gamesA >= 0 &&
-      gamesB >= 0 &&
-      gamesA !== gamesB;
+    const parsedScore = parseSingleSetDraft(draft.a, draft.b);
+    const scoreValid = parsedScore !== null;
     const when = scheduleDraft[m.id] ?? toLocalInput(m.scheduledAt) ?? "";
     const played =
       m.status === "played" || m.status === "wo" || m.status === "bye";
@@ -195,10 +188,9 @@ export function LetzmrCategoryPage() {
                 disabled={!scoreValid}
                 title={scoreValid ? undefined : "Informe os games dos dois lados (sem empate)."}
                 onClick={() => {
+                  if (!parsedScore) return;
                   void run((e) =>
-                    e.recordScore(m.id, [
-                      { gamesA, gamesB },
-                    ]),
+                    e.recordScore(m.id, [parsedScore]),
                   )
                     .then(() => {
                       setMsg("Placar lançado.");
@@ -986,6 +978,19 @@ export function LetzmrCategoryPage() {
                         setMsg(message);
                         setWarn("");
                         setConflicts(c);
+                      }}
+                      onError={(message) => setWarn(message)}
+                    />
+                    <GroupBatchScoreForm
+                      groupId={g.id}
+                      groupLabel={g.label}
+                      matches={rows}
+                      nameOf={nameOf}
+                      scoreDraft={scoreDraft}
+                      setScoreDraft={setScoreDraft}
+                      onDone={(message) => {
+                        setMsg(message);
+                        setWarn("");
                       }}
                       onError={(message) => setWarn(message)}
                     />

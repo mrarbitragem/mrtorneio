@@ -1,11 +1,13 @@
 import {
   categoryFormatLabel,
+  filterGroupsForPrint,
   groupHasPublishedScores,
   groupPrintWhen,
   printedAtLabel,
   printAthleteNameUpper,
   splitGroupsForCompactPrint,
   splitPrintedAthleteNames,
+  type PrintDateFilter,
 } from "../../domain/print";
 import type { Group, LetzmrStore, StandingRow } from "../../domain/types";
 import { createEngine } from "../../store/engine";
@@ -70,18 +72,21 @@ export function CategoryPrintView({
   categoryId,
   tournamentName,
   categoryName,
+  dateFilter,
 }: {
   store: LetzmrStore;
   categoryId: string;
   tournamentName: string;
   categoryName: string;
+  dateFilter: PrintDateFilter;
 }) {
   const eng = createEngine(store);
   const cat = store.categories.find((c) => c.id === categoryId);
-  const groups = store.groups
+  const allGroups = store.groups
     .filter((g) => g.categoryId === categoryId)
     .sort((a, b) => a.index - b.index);
   const matches = store.matches.filter((m) => m.categoryId === categoryId);
+  const groups = filterGroupsForPrint(allGroups, matches, dateFilter);
   const nameOf = (id: string) => eng.regName(id);
   const printedAt = printedAtLabel();
   const items = groups.map((group) => ({
@@ -95,13 +100,15 @@ export function CategoryPrintView({
   }));
   const sheets = splitGroupsForCompactPrint(items);
 
-  if (groups.length === 0) {
+  if (allGroups.length === 0) {
     return (
       <article className="sheet" data-testid="print-category">
         <p>Gere os grupos antes de imprimir.</p>
       </article>
     );
   }
+
+  if (groups.length === 0) return null;
 
   return (
     <>

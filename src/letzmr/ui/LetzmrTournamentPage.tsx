@@ -244,7 +244,7 @@ export function LetzmrTournamentPage() {
               </Button>
               <Button asChild size="sm" variant="outline" data-testid="print-referees">
                 <Link to={`/t/${t.id}/imprimir/arbitros`} target="_blank" rel="noreferrer">
-                  Imprimir para árbitros
+                  Imprimir jogos
                 </Link>
               </Button>
             </div>

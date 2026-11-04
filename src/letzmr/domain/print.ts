@@ -1,5 +1,5 @@
 import { formatScheduleWhen, knockoutRoundTitle } from "./publicDraw";
-import type { CategoryFormat, LetzmrStore, Match } from "./types";
+import type { CategoryFormat, Group, LetzmrStore, Match } from "./types";
 
 /** Encurta origem da chave para caber no A4: 1º lugar do grupo 1 → 1ºG1. */
 export function shortenBracketLabel(label: string): string {
@@ -406,4 +406,40 @@ export function filterPrintGames(
       ? opts.allDays || opts.dateKeys.has(game.dateKey)
       : opts.includeUnscheduled,
   );
+}
+
+export type PrintDateFilter = {
+  allDays: boolean;
+  dateKeys: Set<string>;
+  includeUnscheduled: boolean;
+};
+
+/** Dias em que há jogos de grupo (não inclui a eliminatória). */
+export function collectGroupPrintDates(store: LetzmrStore, categoryIds?: string[]): string[] {
+  const allowed = categoryIds ? new Set(categoryIds) : null;
+  const keys = new Set<string>();
+  for (const match of store.matches) {
+    if (match.phase !== "GROUP") continue;
+    if (allowed && !allowed.has(match.categoryId)) continue;
+    const key = dateKeyFromIso(match.scheduledAt);
+    if (key) keys.add(key);
+  }
+  return [...keys].sort();
+}
+
+export function filterGroupsForPrint(
+  groups: Group[],
+  matches: Match[],
+  opts: PrintDateFilter,
+): Group[] {
+  return groups.filter((group) => {
+    const groupMatches = matches.filter(
+      (match) => match.groupId === group.id && match.phase === "GROUP",
+    );
+    const keys = [
+      ...new Set(groupMatches.map((match) => dateKeyFromIso(match.scheduledAt)).filter(Boolean)),
+    ];
+    if (keys.length === 0) return opts.includeUnscheduled;
+    return opts.allDays || keys.some((key) => opts.dateKeys.has(key));
+  });
 }

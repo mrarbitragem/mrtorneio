@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
+  collectGroupPrintDates,
   collectPrintGames,
+  filterGroupsForPrint,
   filterPrintGames,
   gamesPrintDateLabel,
 } from "../../domain/print";
@@ -30,16 +32,16 @@ function PrintToolbar({
   arbitrosHref: string;
 }) {
   return (
-    <div className="print-toolbar sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white px-4 py-3 print:hidden">
+    <div className="print-toolbar flex flex-wrap items-center justify-between gap-3 px-4 py-3">
       <p className="text-sm text-[hsl(var(--muted-foreground))]">
-        {kind === "arbitros" ? "Lista do dia para árbitros — A4 retrato." : "Apenas grupos — A4 retrato."}
+        {kind === "arbitros" ? "Lista de jogos — A4 retrato." : "Apenas grupos — A4 retrato."}
       </p>
       <div className="flex flex-wrap gap-2">
         <Button asChild type="button" variant={kind === "grupos" ? "default" : "outline"}>
           <Link to={gruposHref}>Apenas grupos</Link>
         </Button>
         <Button asChild type="button" variant={kind === "arbitros" ? "default" : "outline"}>
-          <Link to={arbitrosHref}>Para árbitros</Link>
+          <Link to={arbitrosHref}>Imprimir jogos</Link>
         </Button>
         <Button type="button" onClick={() => window.print()} data-testid="print-go">
           Imprimir
@@ -94,16 +96,33 @@ export function OrganizerPrintPage() {
   const closeTo = categoryId ? `/t/${tournament.id}/c/${categoryId}` : `/t/${tournament.id}`;
   const refereeCategoryIds = tournamentCategories.map((c) => c.id);
   const groupCategoryIds = categories.map((c) => c.id);
-  const allGames = collectPrintGames(
-    store,
-    kind === "arbitros" ? refereeCategoryIds : groupCategoryIds,
-  );
-  const availableDates = [...new Set(allGames.map((g) => g.dateKey).filter(Boolean))].sort();
-  const selectedDates = allDays ? availableDates : dateKeys.length ? dateKeys : availableDates.slice(0, 1);
-  const filteredGames = filterPrintGames(allGames, {
+  const allGames = collectPrintGames(store, refereeCategoryIds);
+  const availableDates =
+    kind === "arbitros"
+      ? [...new Set(allGames.map((g) => g.dateKey).filter(Boolean))].sort()
+      : collectGroupPrintDates(store, groupCategoryIds);
+  const pickedDates = dateKeys.filter((day) => availableDates.includes(day));
+  const selectedDates = allDays
+    ? availableDates
+    : pickedDates.length
+      ? pickedDates
+      : availableDates.slice(0, 1);
+  const dateFilter = {
     allDays: false,
     dateKeys: new Set(selectedDates),
     includeUnscheduled,
+  };
+  const filteredGames = filterPrintGames(allGames, dateFilter);
+  const hasGroupSheets = categories.some((cat) => {
+    const allGroups = store.groups.filter((g) => g.categoryId === cat.id);
+    if (allGroups.length === 0) return true;
+    return (
+      filterGroupsForPrint(
+        allGroups,
+        store.matches.filter((m) => m.categoryId === cat.id),
+        dateFilter,
+      ).length > 0
+    );
   });
 
   return (
@@ -111,53 +130,57 @@ export function OrganizerPrintPage() {
       <style>{`
         @page { size: A4 portrait; margin: ${kind === "arbitros" ? "5mm 5mm 6mm" : "10mm"}; }
       `}</style>
+      <div className="sticky top-0 z-10 border-b bg-white print:hidden">
       <PrintToolbar
         onClose={closeTo}
         kind={kind}
         gruposHref={printPath(tournament.id, categoryId, "grupos")}
         arbitrosHref={printPath(tournament.id, categoryId, "arbitros")}
       />
-      {kind === "arbitros" && (
-        <div className="print-filter print:hidden">
-          <fieldset>
-            <legend>Datas</legend>
-            <label>
+      <div className="print-filter">
+        <fieldset>
+          <legend>Datas</legend>
+          <label>
+            <input
+              type="checkbox"
+              checked={allDays}
+              onChange={(e) => {
+                setAllDays(e.target.checked);
+                if (e.target.checked) setDateKeys([]);
+              }}
+            />
+            Todos os dias
+          </label>
+          {availableDates.map((day) => (
+            <label key={day}>
               <input
                 type="checkbox"
-                checked={allDays}
+                checked={allDays || selectedDates.includes(day)}
                 onChange={(e) => {
-                  setAllDays(e.target.checked);
-                  if (e.target.checked) setDateKeys([]);
+                  setAllDays(false);
+                  setDateKeys((prev) => {
+                    const current = prev.length ? prev : selectedDates;
+                    return e.target.checked
+                      ? [...new Set([...current, day])]
+                      : current.filter((d) => d !== day);
+                  });
                 }}
               />
-              Todos os dias
+              {gamesPrintDateLabel(day)}
             </label>
-            {availableDates.map((day) => (
-              <label key={day}>
-                <input
-                  type="checkbox"
-                  checked={allDays || selectedDates.includes(day)}
-                  onChange={(e) => {
-                    setAllDays(false);
-                    setDateKeys((prev) =>
-                      e.target.checked ? [...new Set([...prev, day])] : prev.filter((d) => d !== day),
-                    );
-                  }}
-                />
-                {gamesPrintDateLabel(day)}
-              </label>
-            ))}
-          </fieldset>
-          <fieldset>
-            <legend>Opções</legend>
-            <label>
-              <input
-                type="checkbox"
-                checked={includeUnscheduled}
-                onChange={(e) => setIncludeUnscheduled(e.target.checked)}
-              />
-              Incluir jogos sem data
-            </label>
+          ))}
+        </fieldset>
+        <fieldset>
+          <legend>Opções</legend>
+          <label>
+            <input
+              type="checkbox"
+              checked={includeUnscheduled}
+              onChange={(e) => setIncludeUnscheduled(e.target.checked)}
+            />
+            {kind === "arbitros" ? "Incluir jogos sem data" : "Incluir grupos sem data"}
+          </label>
+          {kind === "arbitros" && (
             <label>
               <input
                 type="checkbox"
@@ -166,13 +189,16 @@ export function OrganizerPrintPage() {
               />
               Mostrar resultados já lançados
             </label>
-          </fieldset>
-        </div>
-      )}
+          )}
+        </fieldset>
+      </div>
+      </div>
       <div className="print-root">
         {kind === "grupos" ? (
           categories.length === 0 ? (
             <p className="px-4 text-sm">Nenhuma categoria para imprimir.</p>
+          ) : !hasGroupSheets ? (
+            <p className="px-4 text-sm">Nenhum grupo neste dia.</p>
           ) : (
             categories.map((cat) => (
               <CategoryPrintView
@@ -181,6 +207,7 @@ export function OrganizerPrintPage() {
                 categoryId={cat.id}
                 tournamentName={tournament.name}
                 categoryName={cat.name}
+                dateFilter={dateFilter}
               />
             ))
           )

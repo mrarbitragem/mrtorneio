@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { emptyStore } from "../store/localStore";
 import { createEngine } from "../store/engine";
 import {
+  collectGroupPrintDates,
   collectPrintGames,
+  filterGroupsForPrint,
   formatRefereeTime,
   gamesPrintCategoryCode,
   gamesPrintDisplayName,
@@ -150,5 +152,94 @@ describe("coleta da lista para árbitros", () => {
     expect(sections[0].blocks.length).toBeGreaterThanOrEqual(2);
     expect(sections[0].blocks[0].rows[0].game.phase).not.toBe(sections[0].blocks[1].rows[0].game.phase);
     expect(sections[0].blocks[0].rows[0].timeSpan).toBe(sections[0].blocks[0].rows.length);
+  });
+});
+
+describe("filtro de dias na impressão de grupos", () => {
+  function twoDayGroups() {
+    const eng = createEngine(emptyStore());
+    const t = eng.createTournament("Dias");
+    const c = eng.createCategory({
+      tournamentId: t.id,
+      name: "Feminina Iniciante",
+      format: "GROUP_KO",
+      entryType: "doubles",
+      numGroups: 2,
+      advancersPerGroup: 2,
+    });
+    const pairs = [
+      ["Ana Silva", "Bia Costa"],
+      ["Carla Souza", "Dana Lima"],
+      ["Eva Nunes", "Fran Dias"],
+      ["Gabi Melo", "Helena Paz"],
+      ["Iara Cruz", "Julia Reis"],
+      ["Katia Lopes", "Lia Pinto"],
+    ];
+    for (const names of pairs) eng.register({ categoryId: c.id, names });
+    eng.generateDraw(c.id, () => 0);
+    const groups = eng
+      .getStore()
+      .groups.filter((g) => g.categoryId === c.id)
+      .sort((a, b) => a.index - b.index);
+    eng.scheduleGroup(groups[0].id, {
+      startAt: "2026-11-07T12:00:00.000Z",
+      minutesPerMatch: 1,
+      sameTime: true,
+    });
+    eng.scheduleGroup(groups[1].id, {
+      startAt: "2026-11-08T12:00:00.000Z",
+      minutesPerMatch: 1,
+      sameTime: true,
+    });
+    return { store: eng.getStore(), groups, categoryId: c.id };
+  }
+
+  it("lista só os dias dos jogos de grupo", () => {
+    const { store, categoryId } = twoDayGroups();
+    expect(collectGroupPrintDates(store, [categoryId])).toEqual(["2026-11-07", "2026-11-08"]);
+  });
+
+  it("mantém só os grupos do dia escolhido", () => {
+    const { store, groups, categoryId } = twoDayGroups();
+    const matches = store.matches.filter((m) => m.categoryId === categoryId);
+    const saturday = filterGroupsForPrint(groups, matches, {
+      allDays: false,
+      dateKeys: new Set(["2026-11-07"]),
+      includeUnscheduled: false,
+    });
+    expect(saturday.map((g) => g.id)).toEqual([groups[0].id]);
+  });
+
+  it("grupos sem data só entram com a opção ligada", () => {
+    const eng = createEngine(emptyStore());
+    const t = eng.createTournament("Sem data");
+    const c = eng.createCategory({
+      tournamentId: t.id,
+      name: "Masculina B",
+      format: "GROUP_KO",
+      entryType: "doubles",
+      numGroups: 1,
+      advancersPerGroup: 2,
+    });
+    eng.register({ categoryId: c.id, names: ["Ana", "Bia"] });
+    eng.register({ categoryId: c.id, names: ["Carla", "Dana"] });
+    eng.register({ categoryId: c.id, names: ["Eva", "Fran"] });
+    eng.generateDraw(c.id, () => 0);
+    const groups = eng.getStore().groups.filter((g) => g.categoryId === c.id);
+    const matches = eng.getStore().matches.filter((m) => m.categoryId === c.id);
+    expect(
+      filterGroupsForPrint(groups, matches, {
+        allDays: true,
+        dateKeys: new Set(),
+        includeUnscheduled: false,
+      }),
+    ).toEqual([]);
+    expect(
+      filterGroupsForPrint(groups, matches, {
+        allDays: true,
+        dateKeys: new Set(),
+        includeUnscheduled: true,
+      }).map((g) => g.id),
+    ).toEqual(groups.map((g) => g.id));
   });
 });
