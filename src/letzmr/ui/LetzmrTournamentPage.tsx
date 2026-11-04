@@ -233,7 +233,23 @@ export function LetzmrTournamentPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Categorias</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Categorias</h2>
+          {cats.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm" variant="outline" data-testid="print-categories">
+                <Link to={`/t/${t.id}/imprimir`} target="_blank" rel="noreferrer">
+                  Imprimir grupos
+                </Link>
+              </Button>
+              <Button asChild size="sm" variant="outline" data-testid="print-referees">
+                <Link to={`/t/${t.id}/imprimir/arbitros`} target="_blank" rel="noreferrer">
+                  Imprimir para árbitros
+                </Link>
+              </Button>
+            </div>
+          )}
+        </div>
         {cats.length === 0 ? (
           <p className="text-sm text-[hsl(var(--muted-foreground))]">Nenhuma categoria.</p>
         ) : (

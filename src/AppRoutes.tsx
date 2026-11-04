@@ -6,12 +6,17 @@ import { LetzmrTournamentPage } from "./letzmr/ui/LetzmrTournamentPage";
 import { LetzmrCategoryPage } from "./letzmr/ui/LetzmrCategoryPage";
 import { LetzmrPublicTournamentPage } from "./letzmr/ui/LetzmrPublicTournamentPage";
 import { LetzmrPublicPage } from "./letzmr/ui/LetzmrPublicPage";
+import { OrganizerPrintPage } from "./letzmr/ui/print/OrganizerPrintPage";
 import LoginPage from "./pages/LoginPage";
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/t/:tournamentId/imprimir" element={<OrganizerPrintPage />} />
+      <Route path="/t/:tournamentId/imprimir/:kind" element={<OrganizerPrintPage />} />
+      <Route path="/t/:tournamentId/c/:categoryId/imprimir" element={<OrganizerPrintPage />} />
+      <Route path="/t/:tournamentId/c/:categoryId/imprimir/:kind" element={<OrganizerPrintPage />} />
       <Route path="/" element={<LetzmrShell />}>
         <Route index element={<LetzmrPublicHomePage />} />
         <Route path="painel" element={<LetzmrHomePage />} />
