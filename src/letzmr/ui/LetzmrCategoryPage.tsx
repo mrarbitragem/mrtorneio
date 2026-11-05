@@ -417,8 +417,9 @@ export function LetzmrCategoryPage() {
           data-testid="published-banner"
         >
           <span>
-            <strong>No ar:</strong> os atletas estão vendo esta categoria. Os
-            resultados novos só aparecem depois de “Atualizar página pública”.
+            <strong>No ar:</strong> os atletas estão vendo esta categoria.
+            Placar, próximo confronto e classificação entram na página pública
+            na hora.
           </span>
           <span className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="outline">
@@ -693,7 +694,11 @@ export function LetzmrCategoryPage() {
             onClick={() => {
               void run((e) => e.materializeBracket(cat.id))
                 .then(() => {
-                  setMsg("Chave materializada com classificados.");
+                  setMsg(
+                    cat.published
+                      ? "Chave montada com classificados. Página pública atualizada."
+                      : "Chave montada com classificados.",
+                  );
                   setWarn("");
                 })
                 .catch((err) =>
@@ -701,7 +706,7 @@ export function LetzmrCategoryPage() {
                 );
             }}
           >
-            {singleGroup ? "Montar final" : "Materializar eliminatória"}
+            {singleGroup ? "Montar final" : "Montar chave eliminatória"}
           </Button>
         )}
         <Button

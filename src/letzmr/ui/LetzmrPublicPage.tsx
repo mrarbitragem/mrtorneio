@@ -61,7 +61,7 @@ export function LetzmrPublicPage() {
       }
     }
     void load(false);
-    const timer = window.setInterval(() => void load(true), 30_000);
+    const timer = window.setInterval(() => void load(true), 10_000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);

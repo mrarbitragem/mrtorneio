@@ -142,7 +142,7 @@ export function createEngine(initial?: LetzmrStore, options: EngineOptions = {})
     }
     if (registrationIds.some((id) => inMaterializedKo(id))) {
       throw new Error(
-        "A chave eliminatória já tem essas duplas. Ajuste os grupos antes de materializar a chave.",
+        "A chave eliminatória já tem essas duplas. Ajuste os grupos antes de montar a chave.",
       );
     }
   };

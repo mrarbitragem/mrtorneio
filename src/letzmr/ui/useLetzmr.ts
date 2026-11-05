@@ -11,6 +11,10 @@ import {
   syncPublishFlags,
   type LetzmrSession,
 } from "../persist/session";
+import {
+  publishedCategoriesToSync,
+  publishedCategoryFingerprints,
+} from "../persist/publicSync";
 
 let storeListeners = new Set<() => void>();
 
@@ -56,10 +60,15 @@ export function useLetzmr() {
       }
       const eng = getEngine();
       eng.setOrganizerId(user.id);
+      const beforePublic = publishedCategoryFingerprints(eng.getStore());
       const result = fn(eng);
       const persistResult = await persistAfterMutation(eng);
       if (persistResult.ok === false) {
         throw new Error(persistResult.message);
+      }
+      for (const categoryId of publishedCategoriesToSync(beforePublic, eng.getStore())) {
+        const pub = await syncPublishFlags(eng, categoryId, true);
+        if (pub.ok === false) throw new Error(pub.message);
       }
       emitStore();
       return result;

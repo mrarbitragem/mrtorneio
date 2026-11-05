@@ -13,7 +13,7 @@ import { createSupabasePersistence } from "../persist/supabaseRepo";
 import type { PublicCategorySnapshot } from "../persist/types";
 import { createEngine } from "../store/engine";
 
-const REFRESH_MS = 30_000;
+const REFRESH_MS = 10_000;
 
 type AgendaItem = {
   key: string;
