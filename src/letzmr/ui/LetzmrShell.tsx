@@ -43,6 +43,9 @@ export function LetzmrShell() {
                 <Link to="/painel" className="hover:text-[hsl(var(--foreground))]">
                   Painel
                 </Link>
+                <Link to="/painel/conversor" className="hover:text-[hsl(var(--foreground))]">
+                  Conversor
+                </Link>
                 <Link to="/" className="hover:text-[hsl(var(--foreground))]">
                   Página pública
                 </Link>
